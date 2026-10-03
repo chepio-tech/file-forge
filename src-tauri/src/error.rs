@@ -35,6 +35,15 @@ pub enum AppError {
     /// The user cancelled the compression; nothing was stored.
     #[error("the compression was cancelled")]
     Cancelled,
+    /// A compression, save or removal holds the work slot, so the app cannot restart for an update now.
+    #[error("busy with another operation")]
+    Busy,
+    /// Installing an update restarts the app, which discards results that were never saved.
+    #[error("unsaved results would be discarded")]
+    UnsavedResults,
+    /// Checking, downloading, verifying or installing an update failed; nothing was changed.
+    #[error("update failed: {0}")]
+    Update(String),
     #[error("i/o error: {0}")]
     Io(String),
     /// A background task panicked or was cancelled, or a result failed verification; the app keeps running.
@@ -62,6 +71,12 @@ impl From<std::io::Error> for AppError {
     }
 }
 
+impl From<tauri_plugin_updater::Error> for AppError {
+    fn from(error: tauri_plugin_updater::Error) -> Self {
+        Self::Update(error.to_string())
+    }
+}
+
 impl From<tauri::Error> for AppError {
     fn from(error: tauri::Error) -> Self {
         Self::Internal(error.to_string())
@@ -82,6 +97,12 @@ mod tests {
         assert_eq!(json, Some(serde_json::json!({ "code": "originalTarget" })));
         let json = serde_json::to_value(AppError::Cancelled).ok();
         assert_eq!(json, Some(serde_json::json!({ "code": "cancelled" })));
+        let json = serde_json::to_value(AppError::Busy).ok();
+        assert_eq!(json, Some(serde_json::json!({ "code": "busy" })));
+        let json = serde_json::to_value(AppError::UnsavedResults).ok();
+        assert_eq!(json, Some(serde_json::json!({ "code": "unsavedResults" })));
+        let json = serde_json::to_value(AppError::Update("offline".into())).ok();
+        assert_eq!(json, Some(serde_json::json!({ "code": "update", "detail": "offline" })));
     }
 
     #[test]

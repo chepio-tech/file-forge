@@ -37,16 +37,35 @@ The publication step runs `.github/scripts/publishRelease.sh`. It creates a rele
 Authentication and network failures stop publication. `gh release create` uploads assets to a draft before
 publishing the complete immutable release.
 
+### Updater artifacts (ADR-0013)
+The release build adds `--config src-tauri/tauri.release.conf.json`, which turns on `createUpdaterArtifacts`, and
+signs the updater artifacts with the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets.
+Local `pnpm tauri build` stays unsigned and needs no key. The matrix `updates` entries name each updater target and
+its asset: the macOS `.app.tar.gz` archives are extra assets; the AppImage, `.deb`, `.rpm`, NSIS and MSI installers
+are reused. Before publication, `.github/scripts/updaterManifest.mjs` writes `latest.json` and fails the release if
+any signature does not verify with `plugins.updater.pubkey` or is not bound to the tagged version
+(`docs/updaterManifest.test.ts` covers it with throwaway-key fixtures). Installed apps read
+`releases/latest/download/latest.json`, so the repository must be public.
+
+Updater key:
+- Create it once: `pnpm tauri signer generate -w ~/.tauri/fileforge-updater.key` with a password. Keep the key file
+  and the password in an offline backup; losing either strands every installed copy (ADR-0013).
+- Put the `.pub` file's content into `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`, and the key file's
+  content and the password into the two repository secrets.
+- Rotating: ship one release signed with the old key that contains the new public key, then switch the secrets.
+
 Release checklist:
 1. Bump `version` under `[workspace.package]` in `Cargo.toml` — the only version source (Tauri falls back to it).
 2. CI green on `main`.
-3. Tag `vX.Y.Z` on `main` and push it. This publishes the release, so it needs approval.
-4. Smoke-test one installer per OS from the README links. A rerun for an existing release fails without changing it;
+3. Tag `vX.Y.Z` on `main` and push it. This publishes the release, so it needs approval. The repository must be
+   public and the updater secrets present.
+4. Smoke-test one installer per OS from the README links, and that the previous version offers this update. A rerun for an existing release fails without changing it;
    fix a published release with a new patch version (ADR-0010).
 5. If publication was interrupted and a draft remains, review it before an approved cleanup or retry.
 
 ## Repository settings
-- The repository remains private on GitHub Free. Branch/tag rulesets are unavailable on this plan: CI runs
+- The repository is private on GitHub Free until the first release; installed apps need it public to read
+  `latest.json` (ADR-0013). Branch/tag rulesets are unavailable on this plan: CI runs
   `frontend` and `rust`, but successful checks are not an enforced condition for merging. Review both before merging.
 - Pull requests use squash only, with the PR title as the commit title and commit messages as its body.
   Use `[fileforge]: …` titles. Merged source branches are automatically deleted.
@@ -65,6 +84,7 @@ Release checklist:
 ## Signing
 - macOS: ad-hoc (`signingIdentity: "-"`). Not notarized: first launch needs right-click → Open.
 - Windows: unsigned; SmartScreen shows "More info → Run anyway".
+- Updater artifacts: minisign key, independent of OS signing (see "Updater artifacts" above).
 - To add later: Apple Developer ID + notarization secrets, Windows certificate; see Tauri's signing guides.
 
 ## Icons

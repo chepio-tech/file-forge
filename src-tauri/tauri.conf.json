@@ -64,5 +64,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM4NjAwN0E2QzE5MUQ5RkUKUldUKzJaSEJwZ2RneUVmZURnWnlJME5vdWFudnRvL1hpNm1ZbGNhNldnTjkxNWgxZ0hOVzBuUlcK",
+      "endpoints": ["https://github.com/chepio-tech/file-forge/releases/latest/download/latest.json"],
+      "requireSignedVersion": true,
+      "windows": { "installMode": "passive" }
+    }
   }
 }

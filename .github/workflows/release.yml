@@ -1,7 +1,8 @@
 # Builds installers for macOS (Apple Silicon + Intel), Windows and Linux. A pushed `v*` tag publishes them under
 # stable names as a GitHub release, so the README's `releases/latest/download/` links download them (ADR-0009).
 # A manual run (Actions → release → Run workflow) only builds them as workflow artifacts.
-# See docs/architecture/deployment.md.
+# Updater artifacts are signed with the `TAURI_SIGNING_PRIVATE_KEY*` secrets and listed in the release's `latest.json`,
+# which installed apps read to update themselves (ADR-0013). See docs/architecture/deployment.md.
 name: release
 
 on:
@@ -19,15 +20,20 @@ jobs:
       matrix:
         # `installers`: space-separated `<glob under bundle>=<release asset name>` pairs. The names are the
         # README's download links; docs/readmeDownloads.test.ts keeps both in sync.
+        # `updates`: space-separated `<updater target>=<glob under bundle>=<release asset name>` triples. The target
+        # is the key the updater plugin looks up in `latest.json`: `<os>-<arch>-<bundle type>`, so each installed
+        # package updates from its own format (docs/updaterManifest.test.ts).
         include:
           - platform: macos-latest
             args: --target aarch64-apple-darwin
             bundle: target/aarch64-apple-darwin/release/bundle
             installers: dmg/*.dmg=FileForge-macOS-AppleSilicon.dmg
+            updates: darwin-aarch64-app=macos/*.app.tar.gz=FileForge-macOS-AppleSilicon.app.tar.gz
           - platform: macos-latest
             args: --target x86_64-apple-darwin
             bundle: target/x86_64-apple-darwin/release/bundle
             installers: dmg/*.dmg=FileForge-macOS-Intel.dmg
+            updates: darwin-x86_64-app=macos/*.app.tar.gz=FileForge-macOS-Intel.app.tar.gz
           - platform: ubuntu-22.04
             args: ""
             bundle: target/release/bundle
@@ -35,12 +41,19 @@ jobs:
               appimage/*.AppImage=FileForge-Linux-x64.AppImage
               deb/*.deb=FileForge-Linux-x64.deb
               rpm/*.rpm=FileForge-Linux-x64.rpm
+            updates: >-
+              linux-x86_64-appimage=appimage/*.AppImage=FileForge-Linux-x64.AppImage
+              linux-x86_64-deb=deb/*.deb=FileForge-Linux-x64.deb
+              linux-x86_64-rpm=rpm/*.rpm=FileForge-Linux-x64.rpm
           - platform: windows-latest
             args: ""
             bundle: target/release/bundle
             installers: >-
               nsis/*-setup.exe=FileForge-Windows-x64-setup.exe
               msi/*.msi=FileForge-Windows-x64.msi
+            updates: >-
+              windows-x86_64-nsis=nsis/*-setup.exe=FileForge-Windows-x64-setup.exe
+              windows-x86_64-msi=msi/*.msi=FileForge-Windows-x64.msi
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -66,10 +79,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm tauri build ${{ matrix.args }}
+      - run: pnpm tauri build --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
         env:
           # Tauri otherwise skips Finder layout on CI, which drops the DMG background and icon positions.
           TAURI_BUNDLER_DMG_IGNORE_CI: "true"
+          # Signs the updater artifacts; installed apps verify them with `plugins.updater.pubkey` (ADR-0013).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Collect installers under stable names
         shell: bash
@@ -90,12 +106,42 @@ jobs:
           done
           ls -l installers
 
+      - name: Collect updater artifacts and their signatures
+        shell: bash
+        env:
+          BUNDLE: ${{ matrix.bundle }}
+          UPDATES: ${{ matrix.updates }}
+        run: |
+          shopt -s nullglob
+          read -ra entries <<< "$UPDATES"
+          mkdir -p installers updates
+          for entry in "${entries[@]}"; do
+            target=${entry%%=*}
+            rest=${entry#*=}
+            files=("$BUNDLE"/${rest%%=*})
+            if [ "${#files[@]}" -ne 1 ] || [ ! -f "${files[0]}.sig" ]; then
+              echo "::error::Expected one signed $BUNDLE/${rest%%=*}, found ${#files[@]}"
+              exit 1
+            fi
+            cp "${files[0]}" "installers/${rest#*=}"
+            cp "${files[0]}.sig" "updates/$target.sig"
+            printf '%s\n' "${rest#*=}" > "updates/$target.asset"
+          done
+          ls -l updates
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: installers-${{ strategy.job-index }}
           path: installers/
           if-no-files-found: error
           compression-level: 0
+          retention-days: 1
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: updates-${{ strategy.job-index }}
+          path: updates/
+          if-no-files-found: error
           retention-days: 1
 
   publish-release:
@@ -113,6 +159,22 @@ jobs:
           pattern: installers-*
           path: installers
           merge-multiple: true
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: updates-*
+          path: updates
+          merge-multiple: true
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+
+      # Refuses to publish when installed apps would reject an update (wrong key, bad signature, other version).
+      - name: Write the updater manifest
+        env:
+          TAG: ${{ github.ref_name }}
+        run: node .github/scripts/updaterManifest.mjs
 
       - name: Publish the GitHub release
         env:

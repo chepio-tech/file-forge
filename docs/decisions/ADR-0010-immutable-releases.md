@@ -2,7 +2,7 @@
 
 ## Status
 Accepted; supersedes ADR-0009's replacement of assets when a tag is rerun. Its stable installer names, download
-URLs and native-runner builds remain in force.
+URLs and native-runner builds remain in force. ADR-0013 adds updater assets to each release.
 
 ## Date
 2026-10-03

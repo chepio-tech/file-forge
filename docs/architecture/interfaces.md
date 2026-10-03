@@ -30,11 +30,15 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
   Choosing any session input (including aliases, macOS case variants and files removed from the list) returns `originalTarget`.
 - `save_results_to_folder(ids)` — folder picker, `<name>-compressed.pdf` without overwriting → `SavedFile[]` or `null`.
 - `reveal_result(id)` — show the last saved copy in the file manager.
+- `check_for_update` → `{ currentVersion, availableVersion | null }`; remembers the found update in Rust (ADR-0013).
+- `install_update(discardUnsaved)` — downloads, verifies and installs the update found by the last check, then
+  restarts, so it settles only on failure: `busy` while the work slot is held, `unsavedResults` when results were
+  never saved and `discardUnsaved` is `false`, `update` for network, signature or installer failures.
 - Event `files-added` — files dropped on the window, already registered → `RegisterOutcome`.
 - The UI also listens to the webview's drag-enter/leave events for hover feedback only (paths ignored).
 
 Error codes: `unknownFile`, `noResult`, `originalTarget`, `notAFile`, `pdfTooLarge`, `pdfEncrypted`, `pdfSigned`, `pdfMalformed`,
-`invalidOptions`, `cancelled`, `io`, `internal`.
+`invalidOptions`, `cancelled`, `busy`, `unsavedResults`, `update`, `io`, `internal`.
 
 ## Compatibility
 UI and shell ship in one binary, so there is no versioning between them; a contract change is a single commit that

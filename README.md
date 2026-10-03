@@ -44,6 +44,8 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
   batch, then save one result or all results to a folder.
 - Keep originals untouched. Results are never larger; encrypted and digitally signed PDFs are refused.
 - Work locally, with system light/dark themes and no file uploads.
+- Update from inside the app: FileForge checks the latest GitHub release at startup or on request and installs a
+  newer, signature-verified version only when you choose **Restart to update**. The check sends no files.
 
 ## Develop
 

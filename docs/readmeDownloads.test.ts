@@ -2,10 +2,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+// Utils
+import releaseMatrixEntries from "./releaseMatrixEntries";
 
 const root = process.cwd();
 const readme = readFileSync(resolve(root, "README.md"), "utf8");
-const releaseWorkflow = readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8");
 const downloadSection = readme.split("## Download\n")[1]?.split("## About\n")[0] ?? "";
 const document = new DOMParser().parseFromString(downloadSection, "text/html");
 const installersUrl = "https://github.com/chepio-tech/file-forge/releases/latest/download/";
@@ -45,7 +46,7 @@ describe("README downloads", () => {
   });
 
   it("links exactly the installers the release workflow publishes", () => {
-    const published = [...releaseWorkflow.matchAll(/=(FileForge-[\w.-]+)/g)].map((match) => match[1]);
+    const published = releaseMatrixEntries("installers").map(([, asset]) => asset);
     expect(published).toHaveLength(7);
     expect(new Set(published).size).toBe(published.length);
     const linkPattern = new RegExp(`${installersUrl.replace(/[.]/g, "\\.")}([\\w.-]+)\\)`, "g");
