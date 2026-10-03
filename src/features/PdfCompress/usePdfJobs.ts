@@ -17,6 +17,9 @@ export type Job =
 export interface PdfJobs {
   jobs: ReadonlyMap<FileId, Job>;
   running: boolean;
+  saving: ReadonlySet<FileId>;
+  savingAll: boolean;
+  busy: boolean;
   /** 1-based index of the file being compressed, for "Compressing 2 of 5". */
   progress: { current: number; total: number } | null;
   /** Why the last save failed; results stay intact and can be saved again. */
@@ -36,6 +39,9 @@ export function usePdfJobs(files: FileInfo[]): PdfJobs {
   const [jobs, setJobs] = useState<Map<FileId, Job>>(new Map());
   const [progress, setProgress] = useState<PdfJobs["progress"]>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [saving, setSaving] = useState<ReadonlySet<FileId>>(new Set());
+  const [savingAll, setSavingAll] = useState(false);
+  const operating = useRef(false);
   const present = useRef(new Set<FileId>());
 
   // Track the current list for the running loop, and forget jobs of files that left it.
@@ -48,27 +54,33 @@ export function usePdfJobs(files: FileInfo[]): PdfJobs {
   }, [files]);
 
   const update = useCallback((id: FileId, job: Job) => {
-    setJobs((current) => new Map(current).set(id, job));
+    setJobs((current) => (present.current.has(id) ? new Map(current).set(id, job) : current));
   }, []);
 
   const compressAll = useCallback(
     async (options: PdfOptions) => {
+      if (operating.current || files.length === 0) return;
+      operating.current = true;
       const ids = files.map((file) => file.id);
       setNotice(null);
       setJobs(new Map(ids.map((id) => [id, { status: "waiting" } as Job])));
       const key = optionsKey(options);
-      for (const [index, id] of ids.entries()) {
-        if (!present.current.has(id)) continue;
-        setProgress({ current: index + 1, total: ids.length });
-        update(id, { status: "working" });
-        try {
-          const report = await fileforgeApi.compressPdf(id, options);
-          update(id, { status: "done", report, optionsKey: key });
-        } catch (error) {
-          update(id, { status: "error", message: errorMessage(error) });
+      try {
+        for (const [index, id] of ids.entries()) {
+          if (!present.current.has(id)) continue;
+          setProgress({ current: index + 1, total: ids.length });
+          update(id, { status: "working" });
+          try {
+            const report = await fileforgeApi.compressPdf(id, options);
+            update(id, { status: "done", report, optionsKey: key });
+          } catch (error) {
+            update(id, { status: "error", message: errorMessage(error) });
+          }
         }
+      } finally {
+        setProgress(null);
+        operating.current = false;
       }
-      setProgress(null);
     },
     [files, update],
   );
@@ -82,34 +94,54 @@ export function usePdfJobs(files: FileInfo[]): PdfJobs {
 
   const save = useCallback(
     async (id: FileId) => {
+      if (operating.current) return;
+      operating.current = true;
+      setSaving(new Set([id]));
+      setNotice(null);
       try {
         const name = await fileforgeApi.saveResult(id);
         if (name) markSaved(id, name);
       } catch (error) {
         setNotice(errorMessage(error));
+      } finally {
+        setSaving(new Set());
+        operating.current = false;
       }
     },
     [markSaved],
   );
 
   const saveAll = useCallback(async () => {
+    if (operating.current) return;
     const ids = [...jobs].filter(([, job]) => job.status === "done" && !job.report.keptOriginal).map(([id]) => id);
     if (ids.length === 0) return;
+    operating.current = true;
+    setSaving(new Set(ids));
+    setSavingAll(true);
+    setNotice(null);
     try {
       const saved = await fileforgeApi.saveResultsToFolder(ids);
       for (const file of saved ?? []) markSaved(file.id, file.name);
     } catch (error) {
       setNotice(errorMessage(error));
+    } finally {
+      setSaving(new Set());
+      setSavingAll(false);
+      operating.current = false;
     }
   }, [jobs, markSaved]);
 
   const reveal = useCallback((id: FileId) => {
-    void fileforgeApi.revealResult(id);
+    setNotice(null);
+    void fileforgeApi.revealResult(id).catch((error: unknown) => setNotice(errorMessage(error)));
   }, []);
 
   return {
     jobs,
     running: progress !== null,
+    saving,
+    savingAll,
+    busy: progress !== null || saving.size > 0,
     progress,
     notice,
     dismissNotice: () => setNotice(null),

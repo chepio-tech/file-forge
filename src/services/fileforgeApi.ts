@@ -58,6 +58,7 @@ export interface SavedFile {
 export type AppErrorCode =
   | "unknownFile"
   | "noResult"
+  | "originalTarget"
   | "notAFile"
   | "pdfTooLarge"
   | "pdfEncrypted"

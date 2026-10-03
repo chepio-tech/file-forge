@@ -16,6 +16,9 @@ pub enum AppError {
     /// Saving was requested for a file that has not been compressed yet.
     #[error("no result for file id {0}")]
     NoResult(FileId),
+    /// A save destination is an input file, including a file removed from the current list.
+    #[error("the save destination is an original input file")]
+    OriginalTarget,
     /// The path is a directory or another non-regular file.
     #[error("not a regular file: {0}")]
     NotAFile(String),
@@ -71,6 +74,8 @@ mod tests {
         assert_eq!(json, Some(serde_json::json!({ "code": "notAFile", "detail": "Scans" })));
         let json = serde_json::to_value(AppError::PdfSigned).ok();
         assert_eq!(json, Some(serde_json::json!({ "code": "pdfSigned" })));
+        let json = serde_json::to_value(AppError::OriginalTarget).ok();
+        assert_eq!(json, Some(serde_json::json!({ "code": "originalTarget" })));
     }
 
     #[test]

@@ -61,7 +61,7 @@ function PdfCompress({ tool, active }: ToolPanelProps) {
         actions={
           files.length > 0 ? (
             <>
-              <button type="button" className="button button--ghost" onClick={intake.clear} disabled={jobs.running}>
+              <button type="button" className="button button--ghost" onClick={intake.clear} disabled={jobs.busy}>
                 {messages.intake.clear}
               </button>
               <button type="button" className="button" onClick={() => void intake.pick()}>
@@ -89,7 +89,7 @@ function PdfCompress({ tool, active }: ToolPanelProps) {
             <PdfSettings
               preset={preset}
               options={options}
-              disabled={jobs.running}
+              disabled={jobs.busy}
               onPreset={choosePreset}
               onCustom={editCustom}
             />
@@ -103,12 +103,13 @@ function PdfCompress({ tool, active }: ToolPanelProps) {
               <FileList
                 files={files}
                 onRemove={intake.remove}
-                locked={jobs.running}
+                locked={jobs.busy}
                 renderDetails={(file) => (
                   <PdfJobStatus
                     id={file.id}
                     job={jobs.jobs.get(file.id)}
-                    busy={jobs.running}
+                    busy={jobs.busy}
+                    saving={jobs.saving.has(file.id)}
                     onSave={(id) => void jobs.save(id)}
                     onReveal={jobs.reveal}
                   />
@@ -136,14 +137,14 @@ function PdfCompress({ tool, active }: ToolPanelProps) {
             ) : null}
           </div>
           {savable > 0 ? (
-            <button type="button" className="button" disabled={jobs.running} onClick={() => void jobs.saveAll()}>
-              {messages.pdf.saveAll(savable)}
+            <button type="button" className="button" disabled={jobs.busy} onClick={() => void jobs.saveAll()}>
+              {jobs.savingAll ? messages.pdf.saving : messages.pdf.saveAll(savable)}
             </button>
           ) : null}
           <button
             type="button"
             className="button button--primary"
-            disabled={jobs.running}
+            disabled={jobs.busy}
             onClick={() => void jobs.compressAll(options)}
           >
             {jobs.progress

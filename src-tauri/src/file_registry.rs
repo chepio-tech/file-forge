@@ -4,7 +4,7 @@
 //! and are never persisted.
 
 // Core
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -51,6 +51,8 @@ pub struct FileRegistry {
 struct Inner {
     next_id: FileId,
     files: HashMap<FileId, RegisteredFile>,
+    /// Keep input paths protected for the entire session, even after removal from the UI.
+    originals: HashSet<PathBuf>,
 }
 
 impl FileRegistry {
@@ -82,12 +84,30 @@ impl FileRegistry {
         }
         inner.next_id += 1;
         let info = FileInfo { id: inner.next_id, name: display_name(&path), size: metadata.len(), kind };
+        inner.originals.insert(path.clone());
         inner.files.insert(info.id, RegisteredFile { path, info: info.clone() });
         Ok(info)
     }
 
     pub fn get(&self, id: FileId) -> Result<RegisteredFile, AppError> {
         self.lock().files.get(&id).cloned().ok_or(AppError::UnknownFile(id))
+    }
+
+    /// Resolve aliases before saving so a native dialog cannot overwrite any input file.
+    pub fn check_save_target(&self, target: &Path) -> Result<(), AppError> {
+        let resolved = match target.canonicalize() {
+            Ok(path) => path,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let parent = target.parent().ok_or(error)?;
+                let name = target.file_name().ok_or(AppError::OriginalTarget)?;
+                parent.canonicalize()?.join(name)
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if self.lock().originals.contains(&resolved) {
+            return Err(AppError::OriginalTarget);
+        }
+        Ok(())
     }
 
     /// Forgets a file. Removing an unknown id is not an error: the UI may race with itself on double clicks.
@@ -177,5 +197,37 @@ mod tests {
         let again = registry.register(path).expect("png again");
         assert_ne!(again.id, info.id);
         assert_eq!(again.kind, FileKind::Image);
+    }
+
+    #[test]
+    fn saving_cannot_overwrite_any_input_even_after_removal() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let first = write(dir.path(), "first.pdf", b"%PDF-first");
+        let second = write(dir.path(), "second.pdf", b"%PDF-second");
+        let registry = FileRegistry::default();
+        let info = registry.register(first.clone()).expect("first");
+        registry.register(second.clone()).expect("second");
+        registry.remove(info.id);
+
+        for path in [&first, &second, &dir.path().join(".").join("first.pdf")] {
+            assert!(matches!(registry.check_save_target(path), Err(AppError::OriginalTarget)));
+        }
+        assert!(registry.check_save_target(&dir.path().join("new.pdf")).is_ok());
+        std::fs::remove_file(&first).expect("external deletion");
+        assert!(matches!(registry.check_save_target(&first), Err(AppError::OriginalTarget)));
+        assert_eq!(std::fs::read(second).expect("original"), b"%PDF-second");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_through_an_alias_to_an_input_is_refused() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let original = write(dir.path(), "input.pdf", b"%PDF-original");
+        let alias = dir.path().join("alias.pdf");
+        std::os::unix::fs::symlink(&original, &alias).expect("symlink");
+        let registry = FileRegistry::default();
+        registry.register(original).expect("input");
+
+        assert!(matches!(registry.check_save_target(&alias), Err(AppError::OriginalTarget)));
     }
 }

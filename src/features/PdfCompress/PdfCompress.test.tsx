@@ -200,6 +200,77 @@ describe("PdfCompress compression", () => {
     expect(screen.getByRole("button", { name: "Save…" })).toBeEnabled();
   });
 
+  it("locks result-changing actions during a save and unlocks them after cancellation", async () => {
+    await withFiles(file(1, "a.pdf"));
+    let cancel: () => void = () => {};
+    api().api.saveResult.mockImplementationOnce(() => new Promise((resolve) => (cancel = () => resolve(null))));
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Save…" }));
+
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Compress 1 file" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Clear list" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove a.pdf" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Balanced" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Saving…" }));
+    expect(api().api.saveResult).toHaveBeenCalledTimes(1);
+
+    await act(async () => cancel());
+
+    expect(screen.getByRole("button", { name: "Save…" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Compress 1 file" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Saved" })).not.toBeInTheDocument();
+  });
+
+  it("explains why an original cannot be used as the save destination and allows another attempt", async () => {
+    await withFiles(file(1, "a.pdf"));
+    api().api.saveResult.mockRejectedValueOnce({ code: "originalTarget" });
+    api().api.saveResult.mockResolvedValueOnce("safe-copy.pdf");
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Save…" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Original files cannot be overwritten.");
+    await userEvent.click(screen.getByRole("button", { name: "Save…" }));
+
+    expect(await screen.findByRole("button", { name: "Saved" })).toHaveAttribute(
+      "title",
+      expect.stringContaining("safe-copy.pdf"),
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("shows a reveal error while preserving the saved result", async () => {
+    await withFiles(file(1, "a.pdf"));
+    api().api.saveResult.mockResolvedValueOnce("a-compressed.pdf");
+    api().api.revealResult.mockRejectedValueOnce({ code: "io", detail: "file manager failed" });
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Save…" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Saved" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("The file could not be read or written.");
+    expect(screen.getByRole("button", { name: "Saved" })).toBeEnabled();
+  });
+
+  it("marks every successfully saved batch result and releases the busy state", async () => {
+    await withFiles(file(1, "a.pdf"), file(2, "b.pdf"));
+    let finish: () => void = () => {};
+    api().api.saveResultsToFolder.mockImplementationOnce(
+      () => new Promise((resolve) => (finish = () => resolve([
+          { id: 1, name: "a-compressed.pdf" },
+          { id: 2, name: "b-compressed.pdf" },
+        ]))),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Compress 2 files" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Save 2 results to folder…" }));
+
+    expect(screen.getByRole("button", { name: "Compress 2 files" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Saving…" })).toHaveLength(3);
+    await act(async () => finish());
+
+    expect(screen.getAllByRole("button", { name: "Saved" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Compress 2 files" })).toBeEnabled();
+  });
+
   it("switches to Custom when a number is edited and flags results as outdated", async () => {
     await withFiles(file(1, "a.pdf"));
     await userEvent.click(screen.getByRole("radio", { name: "Maximum" }));

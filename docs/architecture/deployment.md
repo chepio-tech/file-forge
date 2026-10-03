@@ -27,4 +27,5 @@ derivative used to generate all platform icons: `pnpm tauri icon src-tauri/icons
 generated `android/` and `ios/` folders. `public/app-icon.png` is a copy of `128x128@2x.png` for the UI.
 
 ## CI
-`.github/workflows/ci.yml`: typecheck + Vitest; `cargo fmt --check`, clippy with `-D warnings`, `cargo test`.
+`.github/workflows/ci.yml`: typecheck + Vitest + production frontend build; `cargo fmt --check`, clippy with
+`-D warnings`, `cargo test`. Rust checks use the committed lockfile.

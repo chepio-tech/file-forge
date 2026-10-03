@@ -3,13 +3,16 @@
 ## Critical path: compress one PDF
 1. UI calls `compress_pdf(id, options)`; options are validated at the IPC boundary.
 2. Shell resolves the id to a path (`FileRegistry`), takes the single **work slot** (one compression at a time),
-   checks the file size, reads it into memory.
+   checks that the opened file is regular, checks its size, and reads at most the input limit plus one byte.
+   Files that grow beyond the limit during the read are refused too.
 3. `fileforge_core::pdf::compress` (in `spawn_blocking`): load → refuse encrypted/signed → merge duplicate streams →
    drop unreachable objects → image pass (lossy presets, ≤ 4 images in parallel) → re-deflate → save (object +
    cross-reference streams, or classic for PDF/A-1) → reload and check page count → keep only if smaller.
 4. Shell writes the result atomically to the temp store and returns the `PdfReport`.
 
-The UI runs files strictly one after another; the work slot enforces the same in Rust.
+The UI runs files strictly one after another; the work slot enforces the same in Rust. Saving and removal also
+take the work slot so a result cannot be replaced or deleted while it is being saved. The UI shows pending saves
+and blocks compression, removal and settings changes until the save completes or the dialog is cancelled.
 
 ## Limits (bounded resources)
 | Resource | Limit | Where |
@@ -31,6 +34,10 @@ Peak memory ≈ input + parsed document + up to 4 decoded bitmaps.
 | Output fails to reload or loses pages | `internal`, nothing stored |
 | Panic inside a dependency | Caught by `spawn_blocking` (release builds unwind), `internal` for that file |
 | Disk full while saving | `io`; the partial file is removed, the temp result stays for a retry |
+| Save dialog chooses an original | `originalTarget`; choose a different output name, input stays untouched |
+| Batch output name becomes taken | Retry with the next numbered name; no existing file is replaced |
+| Destination does not support hard links | Batch save returns `io`; use individual saves or a supported filesystem |
+| File manager cannot reveal a saved result | UI notice; the saved result remains available |
 | App quits | Temp results are deleted (`RunEvent::Exit`); also cleared at the next start |
 
 No network, no retries, no timeouts needed: everything is local and user-initiated. Cancellation of a running

@@ -14,12 +14,13 @@ interface PdfJobStatusProps {
   id: FileId;
   job: Job | undefined;
   busy: boolean;
+  saving: boolean;
   onSave: (id: FileId) => void;
   onReveal: (id: FileId) => void;
 }
 
 /** The per-file cells of the PDF list: progress, result size and ratio, save actions. */
-function PdfJobStatus({ id, job, busy, onSave, onReveal }: PdfJobStatusProps) {
+function PdfJobStatus({ id, job, busy, saving, onSave, onReveal }: PdfJobStatusProps) {
   if (!job) return null;
   switch (job.status) {
     case "waiting":
@@ -68,7 +69,7 @@ function PdfJobStatus({ id, job, busy, onSave, onReveal }: PdfJobStatusProps) {
             </button>
           ) : (
             <button type="button" className="button" disabled={busy} onClick={() => onSave(id)}>
-              {messages.pdf.save}
+              {saving ? messages.pdf.saving : messages.pdf.save}
             </button>
           )}
         </span>

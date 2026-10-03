@@ -16,7 +16,8 @@
 
 ## Data handling
 - Registry entries and temp results live for the session only and are not persisted.
-- Originals are opened read-only; nothing writes to an input path.
+- Originals are opened read-only; input paths stay protected for the whole session, even when removed from the
+  list. Save destinations are resolved on the Rust side and refused if they refer to any protected input.
 
 ## Untrusted PDFs
 Limits on file size, decoded stream size and image pixels (`docs/architecture/runtime.md`); encrypted and signed
@@ -25,4 +26,6 @@ in `crates/fileforge-core/tests/pdf_compress.rs`.
 
 ## Temp results
 Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
-the next start. Saved copies are written atomically (temp name + rename).
+the next start. Staging files are created exclusively, flushed and closed before publication, and removed on failure.
+Individual saves use an atomic rename after checking the destination. Batch saves publish with a hard link to
+the complete staging file, retrying numbered names on collisions; this never overwrites a concurrent output.

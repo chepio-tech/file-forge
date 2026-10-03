@@ -3,9 +3,10 @@
 
 // Core
 use std::collections::HashMap;
-use std::fs;
-use std::io;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 // Types
@@ -37,7 +38,7 @@ impl ResultStore {
 
     pub fn put(&self, id: FileId, bytes: &[u8]) -> io::Result<()> {
         let temp_path = self.dir.join(format!("{id}.pdf"));
-        write_atomically(&temp_path, |tmp| fs::write(tmp, bytes))?;
+        write_atomically(&temp_path, |file| file.write_all(bytes), |tmp| fs::rename(tmp, &temp_path))?;
         self.lock().insert(id, StoredResult { temp_path, saved_path: None });
         Ok(())
     }
@@ -53,7 +54,8 @@ impl ResultStore {
     }
 
     pub fn remove(&self, id: FileId) {
-        if let Some(result) = self.lock().remove(&id) {
+        let removed = self.lock().remove(&id);
+        if let Some(result) = removed {
             let _ = fs::remove_file(result.temp_path);
         }
     }
@@ -83,7 +85,7 @@ pub fn output_name(input_name: &str) -> String {
 /// `dir/name`, or `dir/name (2)`, `(3)`… when taken, so saving a batch never overwrites existing files.
 pub fn unique_path(dir: &Path, name: &str) -> PathBuf {
     let candidate = dir.join(name);
-    if !candidate.exists() {
+    if fs::symlink_metadata(&candidate).is_err() {
         return candidate;
     }
     let path = Path::new(name);
@@ -91,29 +93,120 @@ pub fn unique_path(dir: &Path, name: &str) -> PathBuf {
     let extension = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     (2..)
         .map(|n| dir.join(format!("{stem} ({n}){extension}")))
-        .find(|candidate| !candidate.exists())
+        .find(|candidate| fs::symlink_metadata(candidate).is_err())
         .unwrap_or(candidate)
 }
 
 /// Copies a stored result to where the user chose, never leaving a half-written file behind.
 pub fn copy_result(result: &StoredResult, target: &Path) -> io::Result<()> {
-    write_atomically(target, |tmp| fs::copy(&result.temp_path, tmp).map(|_| ()))
+    write_atomically(target, |file| copy_bytes(result, file), |tmp| fs::rename(tmp, target))
 }
 
-/// Writes next to `target` under a temporary name, then renames over it (atomic on the same volume).
-fn write_atomically(target: &Path, write: impl FnOnce(&Path) -> io::Result<()>) -> io::Result<()> {
-    let file_name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let tmp = target.with_file_name(format!(".{file_name}.fileforge-partial"));
-    if let Err(error) = write(&tmp).and_then(|()| fs::rename(&tmp, target)) {
-        let _ = fs::remove_file(&tmp);
-        return Err(error);
+/// Publishes a complete batch output without replacing even a file created after the name was selected.
+pub fn copy_result_to_folder(result: &StoredResult, dir: &Path, name: &str) -> io::Result<PathBuf> {
+    let mut target = unique_path(dir, name);
+    write_atomically(
+        &dir.join(name),
+        |file| copy_bytes(result, file),
+        |tmp| loop {
+            match fs::hard_link(tmp, &target) {
+                Ok(()) => return Ok(()),
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => target = unique_path(dir, name),
+                Err(error) => return Err(error),
+            }
+        },
+    )?;
+    Ok(target)
+}
+
+fn copy_bytes(result: &StoredResult, file: &mut File) -> io::Result<()> {
+    io::copy(&mut File::open(&result.temp_path)?, file).map(|_| ())
+}
+
+/// An exclusively created staging file in the destination directory; cleanup also runs on errors/unwinding.
+struct PartialFile(PathBuf);
+
+impl Drop for PartialFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
     }
-    Ok(())
+}
+
+fn write_atomically(
+    target: &Path,
+    write: impl FnOnce(&mut File) -> io::Result<()>,
+    publish: impl FnOnce(&Path) -> io::Result<()>,
+) -> io::Result<()> {
+    static NEXT_PARTIAL: AtomicU64 = AtomicU64::new(0);
+    let (partial, mut file) = loop {
+        let sequence = NEXT_PARTIAL.fetch_add(1, Ordering::Relaxed);
+        let tmp = target.with_file_name(format!(".fileforge-{}-{sequence}.partial", std::process::id()));
+        match OpenOptions::new().write(true).create_new(true).open(&tmp) {
+            Ok(file) => break (PartialFile(tmp), file),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    };
+    let written = write(&mut file).and_then(|()| file.sync_all());
+    // Windows does not allow renaming an open staging file.
+    drop(file);
+    written?;
+    publish(&partial.0)
+}
+
+#[cfg(test)]
+fn remaining_partials(dir: &Path) -> usize {
+    fs::read_dir(dir)
+        .expect("readable directory")
+        .filter(|entry| entry.as_ref().expect("entry").file_name().to_string_lossy().ends_with(".partial"))
+        .count()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn concurrent_batch_saves_never_overwrite_each_other() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = ResultStore::open(dir.path().join("results")).expect("store");
+        store.put(1, b"%PDF-new").expect("result");
+        let stored = store.get(1).expect("result");
+        let existing = dir.path().join("out.pdf");
+        fs::write(&existing, b"keep existing").expect("existing file");
+        let saved = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| copy_result_to_folder(&stored, dir.path(), "out.pdf").expect("saved")))
+                .collect();
+            handles.into_iter().map(|handle| handle.join().expect("thread")).collect::<Vec<_>>()
+        });
+
+        assert_eq!(saved.iter().collect::<std::collections::HashSet<_>>().len(), 8);
+        assert_eq!(fs::read(existing).expect("existing"), b"keep existing");
+        for path in saved {
+            assert_eq!(fs::read(path).expect("saved copy"), b"%PDF-new");
+        }
+        assert_eq!(remaining_partials(dir.path()), 0);
+    }
+
+    #[test]
+    fn failed_writes_leave_existing_files_unchanged_and_clean_up_staging() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let target = dir.path().join("out.pdf");
+        fs::write(&target, b"keep existing").expect("existing");
+        let written = write_atomically(
+            &target,
+            |file| {
+                file.write_all(b"partial")?;
+                Err(io::Error::other("disk full"))
+            },
+            |tmp| fs::rename(tmp, &target),
+        );
+
+        assert!(written.is_err());
+        assert_eq!(fs::read(target).expect("existing"), b"keep existing");
+        assert_eq!(remaining_partials(dir.path()), 0);
+    }
 
     #[test]
     fn output_names_keep_the_stem() {
@@ -132,6 +225,24 @@ mod tests {
         assert_eq!(second, dir.path().join("a-compressed (2).pdf"));
         fs::write(&second, b"x").expect("write");
         assert_eq!(unique_path(dir.path(), "a-compressed.pdf"), dir.path().join("a-compressed (3).pdf"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn batch_saving_skips_broken_symbolic_links() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = ResultStore::open(dir.path().join("results")).expect("store");
+        store.put(1, b"%PDF-new").expect("result");
+        let stored = store.get(1).expect("result");
+        let taken = dir.path().join("out.pdf");
+        let missing = dir.path().join("missing.pdf");
+        std::os::unix::fs::symlink(&missing, &taken).expect("broken symlink");
+
+        let saved = copy_result_to_folder(&stored, dir.path(), "out.pdf").expect("saved");
+
+        assert_eq!(saved, dir.path().join("out (2).pdf"));
+        assert_eq!(fs::read(saved).expect("saved"), b"%PDF-new");
+        assert_eq!(fs::read_link(taken).expect("symlink intact"), missing);
     }
 
     #[test]

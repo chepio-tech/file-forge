@@ -62,6 +62,7 @@ const messages = {
     alreadyOptimal: "Already optimal",
     reduction: (percent: string) => `−${percent}%`,
     save: "Save…",
+    saving: "Saving…",
     saveAll: (count: number) => (count === 1 ? "Save 1 result to folder…" : `Save ${count} results to folder…`),
     saved: "Saved",
     savedAs: (name: string) => `Saved as ${name}. Click to show it in its folder.`,
@@ -76,6 +77,7 @@ const messages = {
   errors: {
     unknownFile: "This file is no longer in the list.",
     noResult: "Compress the file before saving it.",
+    originalTarget: "Choose a different file name. Original files cannot be overwritten.",
     notAFile: "This is a folder or another non-regular file.",
     pdfTooLarge: "This PDF is larger than the 1 GB limit.",
     pdfEncrypted: "Password-protected PDF. FileForge never removes protection, so it was skipped.",
