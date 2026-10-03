@@ -13,9 +13,18 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 
 ## Commands and events today
 - `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`.
-- `remove_file` — forget a registered file.
+- `remove_file` — forget a registered file and its unsaved result.
+- `compress_pdf(id, options)` → `PdfReport`. Options: `{ images: null }` (lossless) or
+  `{ images: { jpegQuality, maxDpi | null } }`. Ranges are defined in `crates/fileforge-core/src/pdf/options.rs`
+  and validated there; the UI mirrors them in `src/features/PdfCompress/pdfPresets.ts`.
+- `save_result(id)` — native save dialog next to the original → saved file name, or `null` if cancelled.
+- `save_results_to_folder(ids)` — folder picker, `<name>-compressed.pdf` without overwriting → `SavedFile[]` or `null`.
+- `reveal_result(id)` — show the last saved copy in the file manager.
 - Event `files-added` — files dropped on the window, already registered → `RegisterOutcome`.
 - The UI also listens to the webview's drag-enter/leave events for hover feedback only (paths ignored).
+
+Error codes: `unknownFile`, `noResult`, `notAFile`, `pdfTooLarge`, `pdfEncrypted`, `pdfSigned`, `pdfMalformed`,
+`invalidOptions`, `io`, `internal`.
 
 ## Compatibility
 UI and shell ship in one binary, so there is no versioning between them; a contract change is a single commit that

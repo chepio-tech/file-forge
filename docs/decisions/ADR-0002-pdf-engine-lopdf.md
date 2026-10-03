@@ -27,8 +27,7 @@ codecs. No external binaries.
 
 ## Consequences
 - Weaker than Ghostscript on font-heavy and vector-heavy PDFs: no font subsetting.
-- The whole document is loaded into memory: an input size limit is required (see `docs/architecture/runtime.md`
-  once compression ships).
+- The whole document is loaded into memory: an input size limit is required (see `docs/architecture/runtime.md`).
 - We own the image pipeline and its correctness (color spaces, masks, filters).
 
 ## Validation / fitness criteria

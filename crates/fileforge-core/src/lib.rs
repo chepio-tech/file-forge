@@ -4,5 +4,6 @@
 //! without a window. See `docs/architecture/components.md`.
 
 pub mod file_kind;
+pub mod pdf;
 
 pub use file_kind::FileKind;

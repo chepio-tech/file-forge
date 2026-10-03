@@ -26,6 +26,7 @@ const PATHS = {
     </>
   ),
   plus: <path d="M8 3v10M3 8h10" />,
+  check: <path d="M3.25 8.5 6.5 11.75l6.25-7.5" />,
   close: <path d="M4 4l8 8M12 4l-8 8" />,
   warning: (
     <>

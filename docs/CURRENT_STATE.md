@@ -8,16 +8,22 @@ _Updated: 2026-10-03_
   are marked "Soon".
 - File intake for the PDF tool: native open dialog and drag & drop onto the window, registered on the Rust side;
   non-PDF files and folders are skipped with an explanation; list with sizes, remove and clear.
+- PDF compression: Lossless / Balanced / Maximum / Custom (JPEG quality, max DPI); files compressed one by one with
+  per-file status, before → after and savings; save one (dialog next to the original) or all into a folder; show
+  saved file. Encrypted and signed PDFs are refused with an explanation. Measured results:
+  `docs/architecture/runtime.md`.
 - English-only UI; all strings in `src/messages/messages.ts`.
 - Light and dark themes following the system. Chepio developer credit in the footer.
 - CI workflow (typecheck, Vitest, fmt, clippy, cargo test) and a release workflow building installers for all OSes.
 
 ## In progress
-- PDF compression engine and save flow: ROADMAP Phase 1.
+- README download buttons and installers for all three platforms.
 
 ## Known issues
 - Builds are not signed or notarized (ADR-0005): Gatekeeper/SmartScreen warnings on first launch.
-- No automated end-to-end UI test on macOS (no WKWebView WebDriver); dialog and drag & drop are verified manually.
+- No automated end-to-end UI test on macOS (no WKWebView WebDriver); dialogs, drag & drop and the IPC round trip
+  are verified manually.
+- A running compression cannot be cancelled; very large documents show no progress within the file.
 - Dropped folders are skipped, not expanded.
 
 ## Open questions
@@ -25,4 +31,4 @@ _Updated: 2026-10-03_
 - GitHub repository for CI and releases is not set up yet.
 
 ## Next step
-ROADMAP → Phase 1, step 1.
+ROADMAP → Platform track (signing) or Phase 1.1.

@@ -15,6 +15,7 @@
 - Frontend tests / one file: `pnpm test` / `pnpm vitest run src/path/to/File.test.tsx`
 - Typecheck: `pnpm typecheck`
 - Rust tests: `cargo test --workspace` · core only (fast, no Tauri): `cargo test -p fileforge-core`
+- Measure the PDF engine on real files (read-only): `cargo run --release -p fileforge-core --example measure_pdf -- <files>`
 - Rust lint: `cargo clippy --workspace --all-targets -- -D warnings` · format: `cargo fmt --all`
 - Installers for this OS: `pnpm tauri build` (all three OSes: `.github/workflows/release.yml`)
 
@@ -32,6 +33,8 @@ Read only what the task needs:
 - module boundaries, dependency directions → `docs/architecture/components.md`
 - IPC commands, events, error codes → `docs/architecture/interfaces.md`
 - trust boundaries, capabilities, untrusted input → `docs/architecture/security.md`
+- limits, failure behavior, concurrency, measurements → `docs/architecture/runtime.md`
+- engine guarantees (never larger, lossless, refused files) → `docs/domain/invariants.md`
 - packaging, signing, releases → `docs/architecture/deployment.md`
 - UI work → `docs/PRODUCT.md`, tokens in `src/App/App.css`, rules in `src/AGENTS.md`
 - Rust shell rules → `src-tauri/AGENTS.md` · core engine rules → `crates/fileforge-core/AGENTS.md`

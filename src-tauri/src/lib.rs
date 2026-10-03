@@ -5,18 +5,42 @@ mod commands;
 mod drag_drop;
 mod error;
 mod file_registry;
+mod results;
 
+// Core
+use tauri::{Manager, RunEvent};
 // Types
 use crate::file_registry::FileRegistry;
+use crate::results::ResultStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(FileRegistry::default())
-        .invoke_handler(tauri::generate_handler![commands::pick_files, commands::remove_file])
+        .setup(|app| {
+            let dir = app.path().app_cache_dir()?.join("results");
+            app.manage(ResultStore::open(dir)?);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::pick_files,
+            commands::remove_file,
+            commands::compress_pdf,
+            commands::save_result,
+            commands::save_results_to_folder,
+            commands::reveal_result,
+        ])
         .on_window_event(drag_drop::handle_window_event)
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Tauri must start: the bundled config and capabilities are validated at build time");
+
+    app.run(|handle, event| {
+        if let RunEvent::Exit = event
+            && let Some(results) = handle.try_state::<ResultStore>()
+        {
+            results.clear();
+        }
+    });
 }

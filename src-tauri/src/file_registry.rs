@@ -86,6 +86,10 @@ impl FileRegistry {
         Ok(info)
     }
 
+    pub fn get(&self, id: FileId) -> Result<RegisteredFile, AppError> {
+        self.lock().files.get(&id).cloned().ok_or(AppError::UnknownFile(id))
+    }
+
     /// Forgets a file. Removing an unknown id is not an error: the UI may race with itself on double clicks.
     pub fn remove(&self, id: FileId) {
         self.lock().files.remove(&id);
@@ -129,6 +133,7 @@ mod tests {
         assert_eq!(info.name, "report.pdf");
         assert_eq!(info.size, 14);
         assert_eq!(info.kind, FileKind::Pdf);
+        assert_eq!(registry.get(info.id).map(|f| f.info).ok(), Some(info));
     }
 
     #[test]
@@ -168,6 +173,7 @@ mod tests {
         registry.remove(info.id);
         registry.remove(info.id);
 
+        assert!(matches!(registry.get(info.id), Err(AppError::UnknownFile(id)) if id == info.id));
         let again = registry.register(path).expect("png again");
         assert_ne!(again.id, info.id);
         assert_eq!(again.kind, FileKind::Image);

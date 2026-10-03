@@ -16,7 +16,7 @@ Verification: `pnpm typecheck && pnpm test && cargo clippy --workspace --all-tar
 - [x] Light/dark themes, Chepio footer, English-only UI strings in one module
 - [x] CI + release workflows (ADR-0005), knowledge base
 
-## Phase 1 — PDF compression (first feature)
+## Phase 1 — PDF compression (first feature) ✅
 Scope: lossless structural optimization; Balanced/Maximum presets with JPEG recompression and downsampling;
 per-file results; save one / save all to a folder; temp-file lifecycle.
 Non-scope: font subsetting, OCR, encryption, PDF/A, progress per page, cancellation.
@@ -26,12 +26,18 @@ docs updated (interfaces, runtime, invariants).
 Dependencies: Phase 0. Risks: memory on huge PDFs (input limit), unusual image color spaces (skip, never corrupt).
 Verification: `cargo test -p fileforge-core && pnpm vitest run src/features/PdfCompress`
 
-- [ ] Engine: lossless rewrite (prune, dedupe, object + xref streams, re-deflate) with tests
-- [ ] Engine: image pass (JPEG re-encode, DPI-based downsampling, keep-if-smaller) with tests
-- [ ] Engine: limits and typed errors (too large, encrypted, malformed), panic isolation
-- [ ] Shell: `compress_pdf`, temp results, `save_result`, `save_results_to_folder`, `reveal_result`
-- [ ] UI: preset picker with exact parameters, compress all, per-file status and results, save actions
-- [ ] Docs: interfaces, runtime (limits, failure modes), domain invariants, CURRENT_STATE
+- [x] Engine: lossless rewrite (prune, dedupe, object + xref streams, re-deflate) with tests
+- [x] Engine: image pass (JPEG re-encode, DPI-based downsampling, keep-if-smaller) with tests
+- [x] Engine: limits and typed errors (too large, encrypted, signed, malformed), panic isolation
+- [x] Shell: `compress_pdf`, temp results, `save_result`, `save_results_to_folder`, `reveal_result`
+- [x] UI: preset picker with exact parameters, compress all, per-file status and results, save actions
+- [x] Docs: interfaces, runtime (limits, failure modes), domain invariants, CURRENT_STATE
+
+## Phase 1.1 — PDF engine quality (optimization track)
+- [ ] Cancel a running compression; progress inside large documents
+- [ ] Optional metadata/thumbnail stripping as an explicit, non-default option
+- [ ] Flate photos → JPEG in Maximum when it is clearly smaller (screenshots excluded)
+- [ ] Font subsetting research (biggest remaining gap vs Ghostscript, ADR-0002)
 
 ## Phase 2 — Images
 - [ ] Compress: JPEG (mozjpeg-class encoder), PNG (oxipng), WebP; lossless default

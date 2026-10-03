@@ -18,6 +18,11 @@
 - Registry entries and temp results live for the session only and are not persisted.
 - Originals are opened read-only; nothing writes to an input path.
 
-## Planned
-- Temp result files: per-session directory, deleted on removal and on exit (PDF compression task).
-- Input size limits per engine (PDF compression task).
+## Untrusted PDFs
+Limits on file size, decoded stream size and image pixels (`docs/architecture/runtime.md`); encrypted and signed
+files are refused rather than rewritten (`docs/domain/invariants.md`); the engine is exercised with corrupted inputs
+in `crates/fileforge-core/tests/pdf_compress.rs`.
+
+## Temp results
+Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
+the next start. Saved copies are written atomically (temp name + rename).

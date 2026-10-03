@@ -6,7 +6,7 @@ import PdfCompress from "./PdfCompress";
 // Types
 import type { ToolDefinition } from "@/features/featureCatalog";
 // Utils
-import { createApiMock, file } from "@/test/mockFileforgeApi";
+import { createApiMock, file, report } from "@/test/mockFileforgeApi";
 
 const mock = vi.hoisted(() => ({ current: null as ReturnType<typeof createApiMock> | null }));
 
@@ -111,5 +111,122 @@ describe("PdfCompress intake", () => {
     const notice = await screen.findByRole("status");
     expect(notice).toHaveTextContent("The file could not be read or written.");
     expect(notice).not.toHaveTextContent("permission denied");
+  });
+});
+
+describe("PdfCompress compression", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  async function withFiles(...files: ReturnType<typeof file>[]) {
+    render(<PdfCompress tool={tool} active />);
+    await waitFor(() => expect(api().isListeningForDrops()).toBe(true));
+    act(() => api().dropFiles({ files, skipped: [] }));
+  }
+
+  it("starts lossless, with the image settings disabled", async () => {
+    await withFiles(file(1, "a.pdf"));
+
+    expect(screen.getByRole("radio", { name: "Lossless" })).toBeChecked();
+    expect(screen.getByLabelText("JPEG quality")).toBeDisabled();
+    expect(screen.getByText(/stay bit-identical/)).toBeInTheDocument();
+  });
+
+  it("compresses files one after another with the chosen preset and shows the savings", async () => {
+    await withFiles(file(1, "a.pdf"), file(2, "b.pdf"));
+    let release: () => void = () => {};
+    api().api.compressPdf.mockImplementationOnce(
+      (id) => new Promise((resolve) => (release = () => resolve(report(id)))),
+    );
+
+    await userEvent.click(screen.getByRole("radio", { name: "Balanced" }));
+    await userEvent.click(screen.getByRole("button", { name: "Compress 2 files" }));
+
+    expect(screen.getByRole("button", { name: "Compressing 1 of 2…" })).toBeDisabled();
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
+    expect(api().api.compressPdf).toHaveBeenCalledTimes(1);
+    expect(api().api.compressPdf).toHaveBeenCalledWith(1, { images: { jpegQuality: 85, maxDpi: 200 } });
+
+    await act(async () => release());
+
+    await waitFor(() => expect(api().api.compressPdf).toHaveBeenCalledTimes(2));
+    await screen.findByRole("button", { name: "Compress 2 files" });
+    expect(screen.getAllByText("→ 400 kB")).toHaveLength(2);
+    expect(screen.getByText("2.00 MB → 800 kB")).toBeInTheDocument();
+    expect(screen.getAllByText("−60%")).toHaveLength(3);
+  });
+
+  it("explains a failed file and still compresses the rest", async () => {
+    await withFiles(file(1, "locked.pdf"), file(2, "ok.pdf"));
+    api().api.compressPdf.mockRejectedValueOnce({ code: "pdfEncrypted" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Compress 2 files" }));
+
+    expect(await screen.findByText(/Password-protected PDF/)).toBeInTheDocument();
+    expect(await screen.findByText("→ 400 kB")).toBeInTheDocument();
+  });
+
+  it("reports files that could not be made smaller and leaves them out of bulk saving", async () => {
+    await withFiles(file(1, "tight.pdf"), file(2, "big.pdf"));
+    api().api.compressPdf.mockResolvedValueOnce(report(1, { keptOriginal: true, outputSize: 1_000_000 }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Compress 2 files" }));
+    await screen.findByText("Already optimal");
+    await userEvent.click(screen.getByRole("button", { name: "Save 1 result to folder…" }));
+
+    expect(api().api.saveResultsToFolder).toHaveBeenCalledWith([2]);
+  });
+
+  it("saves a result and then shows where it went", async () => {
+    await withFiles(file(1, "a.pdf"));
+    api().api.saveResult.mockResolvedValueOnce("a-compressed.pdf");
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Save…" }));
+    const saved = await screen.findByRole("button", { name: "Saved" });
+    expect(saved).toHaveAttribute("title", expect.stringContaining("a-compressed.pdf"));
+
+    await userEvent.click(saved);
+    expect(api().api.revealResult).toHaveBeenCalledWith(1);
+  });
+
+  it("keeps results when saving fails and says why", async () => {
+    await withFiles(file(1, "a.pdf"));
+    api().api.saveResult.mockRejectedValueOnce({ code: "io", detail: "disk full" });
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Save…" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("The file could not be read or written.");
+    expect(screen.getByRole("button", { name: "Save…" })).toBeEnabled();
+  });
+
+  it("switches to Custom when a number is edited and flags results as outdated", async () => {
+    await withFiles(file(1, "a.pdf"));
+    await userEvent.click(screen.getByRole("radio", { name: "Maximum" }));
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    await screen.findByText("→ 400 kB");
+
+    const quality = screen.getByLabelText("JPEG quality");
+    await userEvent.clear(quality);
+    await userEvent.type(quality, "200{Enter}");
+
+    expect(screen.getByRole("radio", { name: "Custom" })).toBeChecked();
+    expect(quality).toHaveValue(95);
+    expect(screen.getByText(/Settings changed since the last run/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    expect(api().api.compressPdf).toHaveBeenLastCalledWith(1, { images: { jpegQuality: 95, maxDpi: 150 } });
+  });
+
+  it("lets an empty Max DPI keep image resolution", async () => {
+    await withFiles(file(1, "a.pdf"));
+    await userEvent.click(screen.getByRole("radio", { name: "Balanced" }));
+
+    await userEvent.clear(screen.getByLabelText("Max DPI"));
+    await userEvent.tab();
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+
+    expect(api().api.compressPdf).toHaveBeenCalledWith(1, { images: { jpegQuality: 85, maxDpi: null } });
+    expect(screen.getByText(/Image resolution is kept/)).toBeInTheDocument();
   });
 });

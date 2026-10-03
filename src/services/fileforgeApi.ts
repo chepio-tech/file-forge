@@ -26,7 +26,46 @@ export interface RegisterOutcome {
   skipped: string[];
 }
 
-export type AppErrorCode = "notAFile" | "io" | "internal";
+export interface ImageOptions {
+  /** 30–95, see `JPEG_QUALITY_RANGE` in `crates/fileforge-core/src/pdf/options.rs`. */
+  jpegQuality: number;
+  /** 72–600 or `null` to keep every image's resolution. */
+  maxDpi: number | null;
+}
+
+/** `images: null` is the lossless preset. */
+export interface PdfOptions {
+  images: ImageOptions | null;
+}
+
+export interface PdfReport {
+  originalSize: number;
+  outputSize: number;
+  /** The rewrite was not smaller; the result is the original file byte for byte. */
+  keptOriginal: boolean;
+  pages: number;
+  imagesRecompressed: number;
+  imagesDownsampled: number;
+  duplicatesMerged: number;
+  unusedObjectsRemoved: number;
+}
+
+export interface SavedFile {
+  id: FileId;
+  name: string;
+}
+
+export type AppErrorCode =
+  | "unknownFile"
+  | "noResult"
+  | "notAFile"
+  | "pdfTooLarge"
+  | "pdfEncrypted"
+  | "pdfSigned"
+  | "pdfMalformed"
+  | "invalidOptions"
+  | "io"
+  | "internal";
 
 export interface AppError {
   code: AppErrorCode;
@@ -44,7 +83,20 @@ const fileforgeApi = {
   pickFiles: (kinds: FileKind[], filterName: string) =>
     invoke<RegisterOutcome>("pick_files", { kinds, filterName }),
 
+  /** Forgets the file and its unsaved result. */
   removeFile: (id: FileId) => invoke<void>("remove_file", { id }),
+
+  /** Compresses into a temp result; the original is only read. */
+  compressPdf: (id: FileId, options: PdfOptions) => invoke<PdfReport>("compress_pdf", { id, options }),
+
+  /** Native save dialog next to the original; resolves with the saved file name, or `null` when cancelled. */
+  saveResult: (id: FileId) => invoke<string | null>("save_result", { id }),
+
+  /** Native folder picker; saves each result as `<name>-compressed.pdf` without overwriting. `null` when cancelled. */
+  saveResultsToFolder: (ids: FileId[]) => invoke<SavedFile[] | null>("save_results_to_folder", { ids }),
+
+  /** Shows the last saved copy in the system file manager. */
+  revealResult: (id: FileId) => invoke<void>("reveal_result", { id }),
 
   /** Files dropped on the window, already registered by Rust. */
   onFilesAdded: (handler: (outcome: RegisterOutcome) => void): Promise<UnlistenFn> =>
