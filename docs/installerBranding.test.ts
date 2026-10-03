@@ -59,6 +59,40 @@ function tiffRepresentations(path: string) {
 }
 
 describe("native installer branding", () => {
+  it("uses the application ICO for setup and uninstall with 32-bit frames for standard and high DPI", () => {
+    const { installerIcon, uninstallerIcon } = bundle.windows.nsis;
+    expect(bundle.icon).toContain(installerIcon);
+    expect(uninstallerIcon).toBe(installerIcon);
+    const bytes = readAsset(installerIcon);
+    expect(bytes.readUInt16LE(0)).toBe(0);
+    expect(bytes.readUInt16LE(2)).toBe(1);
+    const count = bytes.readUInt16LE(4);
+    expect(count).toBeGreaterThanOrEqual(6);
+    const sizes = [];
+    for (let index = 0; index < count; index++) {
+      const entry = 6 + index * 16;
+      const width = bytes[entry] || 256;
+      const height = bytes[entry + 1] || 256;
+      expect(height).toBe(width);
+      expect(bytes.readUInt16LE(entry + 6)).toBe(32);
+      const length = bytes.readUInt32LE(entry + 8);
+      const offset = bytes.readUInt32LE(entry + 12);
+      expect(offset).toBeGreaterThanOrEqual(6 + count * 16);
+      expect(offset + length).toBeLessThanOrEqual(bytes.length);
+      if (bytes.toString("ascii", offset + 1, offset + 4) === "PNG") {
+        expect(bytes.readUInt32BE(offset + 16)).toBe(width);
+        expect(bytes.readUInt32BE(offset + 20)).toBe(height);
+        expect([bytes[offset + 24], bytes[offset + 25]]).toEqual([8, 6]);
+      } else {
+        expect(bytes.readInt32LE(offset + 4)).toBe(width);
+        expect(bytes.readInt32LE(offset + 8)).toBe(height * 2); // ICO DIBs include the transparency mask.
+        expect(bytes.readUInt16LE(offset + 14)).toBe(32);
+      }
+      sizes.push(width);
+    }
+    expect(sizes).toEqual(expect.arrayContaining([16, 24, 32, 48, 64, 256]));
+  });
+
   it("uses 2× bitmaps in the native NSIS and WiX proportions with uncompressed RGB encoding", () => {
     bitmap(bundle.windows.nsis.headerImage, 300, 114);
     bitmap(bundle.windows.nsis.sidebarImage, 328, 628);
