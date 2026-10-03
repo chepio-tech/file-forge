@@ -4,6 +4,9 @@ The company logo source is `public/images/chepio-tech/main_logo.svg`. The SVG la
 vector and omit its small tagline for legibility at native installer sizes. The welcome/completion panels embed
 the generated application icon from `public/app-icon.png`. File Forge is the application name;
 Chepio.tech is its publisher. No artwork depends on a network URL or an installed Windows font at runtime.
+The setup and uninstall icons are explicitly configured in `src-tauri/tauri.conf.json` to use the application's
+multi-resolution ICO. This supplies native 32-bit frames for standard and high DPI window icons instead of
+NSIS's stock installer icon. `docs/installerBranding.test.ts` checks the configuration and frame data.
 
 | Asset | Native use | Size |
 |---|---|---|

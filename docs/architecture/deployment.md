@@ -19,6 +19,8 @@ installer artwork. The Windows NSIS installer uses a right-aligned header signat
 completion sidebar; the MSI uses a banner and dialog image with the native text area kept white. A small NSIS
 include sets the header alignment and proportional image scaling. Windows artwork is rendered from vectors at
 2× resolution for high DPI displays; the native layout proportions and MSI text area are preserved.
+Setup and uninstall explicitly use the application ICO for their window and executable icons, including
+32-bit frames at native small-icon sizes; omitting these settings falls back to NSIS's stock icons.
 Tauri's installer templates and installation behavior remain the defaults.
 The macOS DMG uses a company signature in its bottom strip, below the standard app and Applications drag targets.
 Its background TIFF contains standard and Retina representations; the signature stays clear of the bottom edge
@@ -69,9 +71,10 @@ Release checklist:
 5. If publication was interrupted and a draft remains, review it before an approved cleanup or retry.
 
 ## Repository settings
-- The repository is private on GitHub Free until the first release; installed apps need it public to read
-  `latest.json` (ADR-0013). Branch/tag rulesets are unavailable on this plan: CI runs
-  `frontend` and `rust`, but successful checks are not an enforced condition for merging. Review both before merging.
+- The repository is public on GitHub Free, so release downloads and the updater endpoint need no GitHub sign-in
+  (ADR-0013). The active `Protect main` ruleset blocks deletion and force pushes, with no bypass actors, and
+  requires a pull request with successful `frontend` and `rust` checks against the latest `main`.
+  GitHub is the source of truth for the live rules: https://github.com/chepio-tech/file-forge/rules/24429918.
 - Pull requests use squash only, with the PR title as the commit title and commit messages as its body.
   Use `[fileforge]: …` titles. Merged source branches are automatically deleted.
 - Organization members need explicit repository access. Only organization owners may create repositories.

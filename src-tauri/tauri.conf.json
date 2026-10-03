@@ -48,6 +48,8 @@
     },
     "windows": {
       "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
         "headerImage": "branding/installer-branding/nsis-header.bmp",
         "sidebarImage": "branding/installer-branding/nsis-sidebar.bmp",
         "installerHooks": "branding/installer-branding/installerBranding.nsh"
