@@ -1,14 +1,16 @@
-// Types
-import type { Messages } from "@/i18n/en";
 // Services
 import { isAppError } from "@/services/fileforgeApi";
+// Consts
+import messages from "@/messages/messages";
 
-/** Maps an error rejected by a Tauri command to a localized sentence; unknown shapes get a generic message. */
-export function errorMessage(t: Messages, error: unknown): string {
-  if (isAppError(error) && error.code in t.errors) {
-    return t.errors[error.code as keyof Messages["errors"]];
+type ErrorCode = keyof typeof messages.errors;
+
+/** Maps an error rejected by a Tauri command to a sentence for the user; unknown shapes get a generic message. */
+export function errorMessage(error: unknown): string {
+  if (isAppError(error) && error.code in messages.errors) {
+    return messages.errors[error.code as ErrorCode];
   }
-  return t.errors.unknown;
+  return messages.errors.unknown;
 }
 
 /** "a.pdf, b.pdf, c.pdf +2": keeps notices one line long. */

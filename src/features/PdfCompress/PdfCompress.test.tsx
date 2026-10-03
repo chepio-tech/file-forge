@@ -1,15 +1,12 @@
 // Core
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 // Components
 import PdfCompress from "./PdfCompress";
-// Hooks
-import useI18n from "@/hooks/useI18n";
 // Types
 import type { ToolDefinition } from "@/features/featureCatalog";
 // Utils
 import { createApiMock, file } from "@/test/mockFileforgeApi";
-import renderWithI18n from "@/test/renderWithI18n";
 
 const mock = vi.hoisted(() => ({ current: null as ReturnType<typeof createApiMock> | null }));
 
@@ -19,15 +16,6 @@ vi.mock("@/services/fileforgeApi", async (importOriginal) => {
   mock.current = createApiMock();
   return { ...original, default: mock.current.api };
 });
-
-function LanguageSwitch() {
-  const { setLocale } = useI18n();
-  return (
-    <button type="button" onClick={() => setLocale("ru")}>
-      ru
-    </button>
-  );
-}
 
 const tool: ToolDefinition = { id: "pdfCompress", icon: "compress", accepts: ["pdf"], formats: "PDF", status: "ready" };
 
@@ -40,7 +28,7 @@ describe("PdfCompress intake", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("starts with an empty state that offers the dialog", async () => {
-    renderWithI18n(<PdfCompress tool={tool} active />);
+    render(<PdfCompress tool={tool} active />);
 
     expect(screen.getByText("Drop PDF files here")).toBeInTheDocument();
     api().api.pickFiles.mockResolvedValueOnce({ files: [file(1, "report.pdf")], skipped: [] });
@@ -54,7 +42,7 @@ describe("PdfCompress intake", () => {
   });
 
   it("accepts dropped PDFs, de-duplicates them and rejects other kinds", async () => {
-    renderWithI18n(<PdfCompress tool={tool} active />);
+    render(<PdfCompress tool={tool} active />);
     await waitFor(() => expect(api().isListeningForDrops()).toBe(true));
 
     act(() => api().dropFiles({ files: [file(1, "a.pdf"), file(2, "photo.jpg", "image")], skipped: ["Scans"] }));
@@ -66,7 +54,7 @@ describe("PdfCompress intake", () => {
   });
 
   it("explains skipped and rejected files in a dismissible notice", async () => {
-    renderWithI18n(<PdfCompress tool={tool} active />);
+    render(<PdfCompress tool={tool} active />);
     await waitFor(() => expect(api().isListeningForDrops()).toBe(true));
 
     act(() => api().dropFiles({ files: [file(2, "photo.jpg", "image")], skipped: ["Scans"] }));
@@ -79,23 +67,9 @@ describe("PdfCompress intake", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("re-renders the notice in the newly chosen language", async () => {
-    renderWithI18n(
-      <>
-        <LanguageSwitch />
-        <PdfCompress tool={tool} active />
-      </>,
-    );
-    await waitFor(() => expect(api().isListeningForDrops()).toBe(true));
-    act(() => api().dropFiles({ files: [], skipped: ["Scans"] }));
-
-    await userEvent.click(screen.getByRole("button", { name: "ru" }));
-
-    expect(screen.getByRole("status")).toHaveTextContent("Пропущено (не файл): Scans");
-  });
 
   it("removes files from the list and from the registry", async () => {
-    renderWithI18n(<PdfCompress tool={tool} active />);
+    render(<PdfCompress tool={tool} active />);
     await waitFor(() => expect(api().isListeningForDrops()).toBe(true));
     act(() => api().dropFiles({ files: [file(1, "a.pdf"), file(3, "b.pdf")], skipped: [] }));
 
@@ -110,14 +84,14 @@ describe("PdfCompress intake", () => {
   });
 
   it("ignores drops while hidden", async () => {
-    renderWithI18n(<PdfCompress tool={tool} active={false} />);
+    render(<PdfCompress tool={tool} active={false} />);
 
     expect(api().isListeningForDrops()).toBe(false);
     expect(api().api.onFilesAdded).not.toHaveBeenCalled();
   });
 
   it("shows the drop overlay while files hover over the window", async () => {
-    renderWithI18n(<PdfCompress tool={tool} active />);
+    render(<PdfCompress tool={tool} active />);
     await waitFor(() => expect(api().api.onDragHover).toHaveBeenCalled());
     const overlay = screen.getByText("Release to add files").closest(".drop-overlay");
 
@@ -128,12 +102,14 @@ describe("PdfCompress intake", () => {
     expect(overlay).not.toHaveClass("drop-overlay--visible");
   });
 
-  it("shows a localized message when the dialog fails", async () => {
-    renderWithI18n(<PdfCompress tool={tool} active />, "ru");
+  it("explains a failed dialog in plain words, without the technical detail", async () => {
+    render(<PdfCompress tool={tool} active />);
     api().api.pickFiles.mockRejectedValueOnce({ code: "io", detail: "permission denied" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Выбрать файлы…" }));
+    await userEvent.click(screen.getByRole("button", { name: "Choose files…" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Не удалось прочитать или записать файл.");
+    const notice = await screen.findByRole("status");
+    expect(notice).toHaveTextContent("The file could not be read or written.");
+    expect(notice).not.toHaveTextContent("permission denied");
   });
 });

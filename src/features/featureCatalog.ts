@@ -1,11 +1,11 @@
 // Types
 import type { IconName } from "@/components/Icon/Icon";
-import type { Messages } from "@/i18n/en";
+import type { Messages } from "@/messages/messages";
 import type { FileKind } from "@/services/fileforgeApi";
 
 /**
  * Every tool the app offers or plans, grouped by file type. Adding a tool: add an entry here, its strings under
- * `tools` in `src/i18n/en.ts` and `ru.ts`, and (when `ready`) its panel in `src/App/toolPanels.ts`.
+ * `tools` in `src/messages/messages.ts`, and (when `ready`) its panel in `src/App/toolPanels.ts`.
  */
 
 export type GroupId = keyof Messages["nav"]["groups"];

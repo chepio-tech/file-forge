@@ -8,7 +8,7 @@ _Updated: 2026-10-03_
   are marked "Soon".
 - File intake for the PDF tool: native open dialog and drag & drop onto the window, registered on the Rust side;
   non-PDF files and folders are skipped with an explanation; list with sizes, remove and clear.
-- English and Russian UI, following the system language with a manual switch (remembered).
+- English-only UI; all strings in `src/messages/messages.ts`.
 - Light and dark themes following the system. Chepio developer credit in the footer.
 - CI workflow (typecheck, Vitest, fmt, clippy, cargo test) and a release workflow building installers for all OSes.
 

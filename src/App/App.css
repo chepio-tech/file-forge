@@ -17,7 +17,7 @@
   --ink-faint: oklch(0.6 0.012 255);
   --line: oklch(0.9 0.006 255);
   --line-strong: oklch(0.82 0.008 255);
-  --tint: oklch(0.22 0.012 255 / 0.06); /* hover wash and segmented-control track */
+  --tint: oklch(0.22 0.012 255 / 0.06); /* hover wash */
 
   /* Accent: the icon's front sheet */
   --accent: oklch(0.56 0.2 257);

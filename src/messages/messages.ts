@@ -1,8 +1,5 @@
-/**
- * English UI strings. The `Messages` type is derived from this object, so every other locale must provide exactly the
- * same keys (enforced by the compiler and by `i18n.test.ts`).
- */
-const en = {
+/** Every user-visible string of the UI, in one place. The app is English-only. */
+const messages = {
   app: {
     name: "FileForge",
   },
@@ -15,7 +12,6 @@ const en = {
       video: "Video",
       audio: "Audio",
     },
-    language: "Interface language",
   },
   /** `nav` is the short label under the group heading; `title` is the full name for the panel and screen readers. */
   tools: {
@@ -58,6 +54,6 @@ const en = {
   },
 };
 
-export type Messages = typeof en;
+export type Messages = typeof messages;
 
-export default en;
+export default messages;

@@ -24,7 +24,7 @@
 - `crates/fileforge-core` must not depend on `tauri` or any UI crate: processing stays testable without a window.
 - Originals are never modified; results go to a temp file until the user saves them (ADR-0003).
 - A processing result is never larger than its input; lossless is the default preset (ADR-0003).
-- Every user-visible string lives in `src/i18n/en.ts` and `src/i18n/ru.ts`; never hard-code UI text.
+- The UI is English-only. Every user-visible string lives in `src/messages/messages.ts`; never hard-code UI text.
 - The Chepio credit is `<ChepioTechFooter />`, the last element of the app footer.
 
 ## Documentation routing

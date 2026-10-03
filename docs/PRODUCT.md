@@ -32,9 +32,8 @@ expressive element; they identify the file-type groups and nothing else.
 2. Safe by default: lossless is the default, originals are never touched, a result is never larger than its input.
 3. Batch-first: every tool works on a list of files; one file is just a short list.
 4. Disappear into the task: drop, adjust, save; no wizards, no onboarding tours.
-5. Native on every OS: respects system theme, language and window conventions.
+5. Native on every OS: respects system theme and window conventions.
 
 ## Accessibility & Inclusion
 WCAG 2.2 AA: 4.5:1 text contrast, visible keyboard focus, full keyboard operation, reduced-motion alternatives.
-Group colors are never the only carrier of meaning (always paired with a label or icon). Interface in English and
-Russian, following the system language with a manual switch.
+Group colors are never the only carrier of meaning (always paired with a label or icon). Interface in English only.

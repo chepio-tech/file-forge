@@ -2,14 +2,14 @@
 import type { ReactNode } from "react";
 // Components
 import Icon from "@/components/Icon/Icon";
-// Hooks
-import useI18n from "@/hooks/useI18n";
 // Types
 import type { FileId, FileInfo } from "@/services/fileforgeApi";
 // Styles
 import "./FileList.css";
 // Utils
 import formatBytes from "@/utils/formatBytes";
+// Consts
+import messages from "@/messages/messages";
 
 interface FileListProps {
   files: FileInfo[];
@@ -21,8 +21,6 @@ interface FileListProps {
 }
 
 function FileList({ files, onRemove, renderDetails, locked = false }: FileListProps) {
-  const { t, locale } = useI18n();
-
   return (
     <ul className="file-list">
       {files.map((file) => (
@@ -31,14 +29,14 @@ function FileList({ files, onRemove, renderDetails, locked = false }: FileListPr
           <span className="file-list__name" title={file.name}>
             {file.name}
           </span>
-          <span className="file-list__size">{formatBytes(file.size, locale)}</span>
+          <span className="file-list__size">{formatBytes(file.size)}</span>
           {renderDetails ? <div className="file-list__details">{renderDetails(file)}</div> : null}
           <button
             type="button"
             className="button button--ghost button--icon file-list__remove"
             onClick={() => onRemove(file.id)}
             disabled={locked}
-            aria-label={t.intake.remove(file.name)}
+            aria-label={messages.intake.remove(file.name)}
           >
             <Icon name="close" />
           </button>

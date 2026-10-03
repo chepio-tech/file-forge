@@ -4,7 +4,7 @@ Product features, engine quality and platform work are separate tracks. Take the
 file before deviating.
 
 ## Phase 0 — App foundation ✅
-Scope: Tauri shell, UI shell with feature groups, file intake (dialog + drop), i18n, themes, docs, CI, packaging.
+Scope: Tauri shell, UI shell with feature groups, file intake (dialog + drop), themes, docs, CI, packaging.
 Non-scope: any processing.
 Definition of Done: app runs on macOS; intake works; tests green; installers build in CI config.
 Verification: `pnpm typecheck && pnpm test && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`
@@ -13,7 +13,7 @@ Verification: `pnpm typecheck && pnpm test && cargo clippy --workspace --all-tar
 - [x] Icons generated from the master artwork
 - [x] File registry, `pick_files` / `remove_file`, drop handling (ADR-0004)
 - [x] Sidebar with groups, PDF tool panel with intake, notices, drop overlay
-- [x] RU/EN, light/dark, Chepio footer
+- [x] Light/dark themes, Chepio footer, English-only UI strings in one module
 - [x] CI + release workflows (ADR-0005), knowledge base
 
 ## Phase 1 — PDF compression (first feature)

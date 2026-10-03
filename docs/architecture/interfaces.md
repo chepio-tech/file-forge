@@ -9,7 +9,7 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 - Files are referenced by `FileId` (a session-scoped number), never by path (ADR-0004).
 - Commands that may block (dialogs, disk, CPU) are `async` and run their work in `spawn_blocking`.
 - Errors are `AppError`, serialized as `{ code, detail }`. The UI shows a localized message per `code`
-  (`errors.*` in `src/i18n/*.ts`); `detail` is for diagnostics only and never shown verbatim.
+  (`errors.*` in `src/messages/messages.ts`); `detail` is for diagnostics only and never shown verbatim.
 
 ## Commands and events today
 - `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`.
