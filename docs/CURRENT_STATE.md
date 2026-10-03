@@ -21,10 +21,11 @@ _Updated: 2026-10-03_
 - PDF reads remain bounded if an input grows after registration. Saving/removal/compression are serialized in Rust;
   the UI shows pending saves and reports save/reveal errors without discarding results.
 - README with platform download navigation, source-build commands, feature scope and current limits.
-- GitHub repository: https://github.com/denys-chepiha/fileforge; the local remote uses SSH.
+- GitHub repository: https://github.com/chepio-tech/file-forge; the local remote uses the dedicated
+  `github-chepio-tech` SSH alias.
 
 ## In progress
-- Push the verified first version and verify GitHub CI.
+- Push the verified first version to the organization repository and verify its GitHub CI.
 
 ## Known issues
 - Builds are not signed or notarized (ADR-0005): Gatekeeper/SmartScreen warnings on first launch.
@@ -45,6 +46,9 @@ _Updated: 2026-10-03_
 - Native app smoke test on a generated PDF: pick → lossless compression (74,600 → 825 bytes) → refused original
   overwrite → individual save → numbered batch save. Original checksum unchanged; output copies identical;
   no staging files left behind. UI mechanical check: no findings.
+- Case-variant and hard-link original protection: regression tests passed on the local case-insensitive macOS volume.
+- GitHub CI passed for the verified implementation (`f16935b`) before the repository switch:
+  https://github.com/denys-chepiha/fileforge/actions/runs/37120318442.
 
 ## Next step
 Finish the ROADMAP release-readiness delivery step; then Platform track (signing) or Phase 1.1.

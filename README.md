@@ -15,11 +15,11 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
 
 ## Install
 
-Open [FileForge releases](https://github.com/denys-chepiha/fileforge/releases) for installer packages:
+Open [FileForge releases](https://github.com/chepio-tech/file-forge/releases) for installer packages:
 
-[![Download for macOS](docs/assets/download-macos.svg)](https://github.com/denys-chepiha/fileforge/releases)
-[![Download for Windows](docs/assets/download-windows.svg)](https://github.com/denys-chepiha/fileforge/releases)
-[![Download for Linux](docs/assets/download-linux.svg)](https://github.com/denys-chepiha/fileforge/releases)
+[![Download for macOS](docs/assets/download-macos.svg)](https://github.com/chepio-tech/file-forge/releases)
+[![Download for Windows](docs/assets/download-windows.svg)](https://github.com/chepio-tech/file-forge/releases)
+[![Download for Linux](docs/assets/download-linux.svg)](https://github.com/chepio-tech/file-forge/releases)
 
 The buttons open the releases page so you can choose the correct architecture and package. Until a release is
 published, use the source-build instructions below.
@@ -43,8 +43,8 @@ Requirements: Rust (stable, 1.88+), Node.js LTS, pnpm 10, and the
 [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
 
 ```sh
-git clone https://github.com/denys-chepiha/fileforge.git
-cd fileforge
+git clone https://github.com/chepio-tech/file-forge.git
+cd file-forge
 pnpm install
 pnpm tauri dev          # run the app
 pnpm test               # UI tests

@@ -1,5 +1,11 @@
 # Deployment
 
+## Repository access
+Canonical repository: https://github.com/chepio-tech/file-forge. On the user's Mac, `origin` uses
+`git@github-chepio-tech:chepio-tech/file-forge.git`, selecting the organization's dedicated SSH identity from
+`~/.ssh/config`. Git's organization-only `url.*.insteadOf` settings also route standard `chepio-tech/` URLs to that
+alias. Preserve personal `github.com` routing and keep commit author/signing settings independent.
+
 ## Artifacts
 `pnpm tauri build` produces installers for the host OS under `target/release/bundle/`:
 macOS `.app` + `.dmg`; Windows `.msi` + NSIS `.exe`; Linux `.deb`, `.rpm`, `.AppImage`.
