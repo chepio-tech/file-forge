@@ -1,7 +1,7 @@
 # ADR-0008: Commit installers to `installers/` under stable names
 
 ## Status
-Accepted; supersedes the draft-release distribution in ADR-0005. Its native-runner builds and unsigned status remain.
+Superseded by ADR-0009 before its first run; no installer was committed to Git.
 
 ## Date
 2026-10-03

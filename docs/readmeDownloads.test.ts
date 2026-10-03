@@ -8,13 +8,13 @@ const readme = readFileSync(resolve(root, "README.md"), "utf8");
 const releaseWorkflow = readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8");
 const downloadSection = readme.split("## Download\n")[1]?.split("## About\n")[0] ?? "";
 const document = new DOMParser().parseFromString(downloadSection, "text/html");
-const installersUrl = "https://github.com/chepio-tech/file-forge/raw/main/installers/";
+const installersUrl = "https://github.com/chepio-tech/file-forge/releases/latest/download/";
 
 describe("README downloads", () => {
   it("places downloading before the app description and features", () => {
     expect(readme.match(/^## .+$/m)?.[0]).toBe("## Download");
     expect(readme.indexOf("## Download")).toBeLessThan(readme.indexOf("Desktop PDF compression"));
-    expect(downloadSection).toContain("Until the release workflow commits the first build");
+    expect(downloadSection).toContain("Until the first release is published");
   });
 
   it("downloads each platform's installer directly with accessible, equally sized local images", () => {
@@ -44,14 +44,14 @@ describe("README downloads", () => {
     }
   });
 
-  it("links exactly the installers the release workflow commits", () => {
-    const committed = [...releaseWorkflow.matchAll(/=(FileForge-[\w.-]+)/g)].map((match) => match[1]);
-    expect(committed).toHaveLength(7);
-    expect(new Set(committed).size).toBe(committed.length);
+  it("links exactly the installers the release workflow publishes", () => {
+    const published = [...releaseWorkflow.matchAll(/=(FileForge-[\w.-]+)/g)].map((match) => match[1]);
+    expect(published).toHaveLength(7);
+    expect(new Set(published).size).toBe(published.length);
     const linkPattern = new RegExp(`${installersUrl.replace(/[.]/g, "\\.")}([\\w.-]+)\\)`, "g");
     const linked = [...downloadSection.matchAll(linkPattern)].map((match) => match[1]);
-    expect(new Set(linked)).toEqual(new Set(committed));
-    expect(linked).toHaveLength(committed.length);
+    expect(new Set(linked)).toEqual(new Set(published));
+    expect(linked).toHaveLength(published.length);
   });
 
   it("uses static image links that survive GitHub Markdown sanitization", () => {

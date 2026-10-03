@@ -3,22 +3,22 @@
 ## Download
 
 <p>
-  <a href="https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-macOS-AppleSilicon.dmg"><img src="docs/assets/download-macos/download-macos.png" alt="Download for macOS" width="260" height="80" /></a>
-  <a href="https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Windows-x64-setup.exe"><img src="docs/assets/download-windows/download-windows.png" alt="Download for Windows" width="260" height="80" /></a>
-  <a href="https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.AppImage"><img src="docs/assets/download-linux/download-linux.png" alt="Download for Linux" width="260" height="80" /></a>
+  <a href="https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-macOS-AppleSilicon.dmg"><img src="docs/assets/download-macos/download-macos.png" alt="Download for macOS" width="260" height="80" /></a>
+  <a href="https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Windows-x64-setup.exe"><img src="docs/assets/download-windows/download-windows.png" alt="Download for Windows" width="260" height="80" /></a>
+  <a href="https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Linux-x64.AppImage"><img src="docs/assets/download-linux/download-linux.png" alt="Download for Linux" width="260" height="80" /></a>
 </p>
 
 The buttons start the download right away: macOS for Apple Silicon, the Windows installer and the Linux AppImage.
-Every installer lives in [installers](installers/); download another package here:
+Every installer is on the [latest release](https://github.com/chepio-tech/file-forge/releases/latest) page;
+download another package here:
 
 | OS | Download |
 |---|---|
-| macOS | [Apple Silicon (.dmg)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-macOS-AppleSilicon.dmg) · [Intel (.dmg)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-macOS-Intel.dmg) |
-| Windows (x64) | [Installer (.exe)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Windows-x64-setup.exe) · [MSI package (.msi)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Windows-x64.msi) |
-| Linux (x64) | [AppImage](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.AppImage) · [Debian/Ubuntu (.deb)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.deb) · [Fedora/openSUSE (.rpm)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.rpm) |
+| macOS | [Apple Silicon (.dmg)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-macOS-AppleSilicon.dmg) · [Intel (.dmg)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-macOS-Intel.dmg) |
+| Windows (x64) | [Installer (.exe)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Windows-x64-setup.exe) · [MSI package (.msi)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Windows-x64.msi) |
+| Linux (x64) | [AppImage](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Linux-x64.AppImage) · [Debian/Ubuntu (.deb)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Linux-x64.deb) · [Fedora/openSUSE (.rpm)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Linux-x64.rpm) |
 
-Until the release workflow commits the first build to `installers/`, the links return "Not Found"; use the
-source-build instructions below.
+Until the first release is published, the links return "Not Found"; use the source-build instructions below.
 
 The app requires macOS 11+, Windows 10+ (WebView2), or Linux with the
 [Tauri runtime prerequisites](https://v2.tauri.app/start/prerequisites/).
@@ -69,7 +69,7 @@ cargo test --workspace --locked
 ```
 
 GitHub Actions checks pull requests and `main`. The release workflow builds installers for macOS Apple Silicon,
-macOS Intel, Windows x64 and Linux x64 and commits them to `installers/` on `main`;
+macOS Intel, Windows x64 and Linux x64 and publishes them as a GitHub release when a `v*` tag is pushed;
 see [deployment](docs/architecture/deployment.md).
 
 ## Current limits
