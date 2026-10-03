@@ -56,9 +56,10 @@ Release checklist:
 - To add later: Apple Developer ID + notarization secrets, Windows certificate; see Tauri's signing guides.
 
 ## Icons
-Master artwork: `icon.png` (repo root, white background). `src-tauri/icons/app-icon.png` is the transparent-background
-derivative used to generate all platform icons: `pnpm tauri icon src-tauri/icons/app-icon.png`, then delete the
-generated `android/` and `ios/` folders. `public/app-icon.png` is a copy of `128x128@2x.png` for the UI.
+Master artwork: `public/icon.png`, transparent, no drop shadow, artwork centred on a square canvas. Generate all
+platform icons from it: `pnpm tauri icon public/icon.png`, then delete the generated `android/` and `ios/` folders.
+`public/app-icon.png` (UI) and `docs/assets/app-icon.png` (README) are copies of `128x128@2x.png`.
+Check with `pnpm vitest run src-tauri/icons/appIcon.test.ts`. The company logo is `public/images/chepio-tech/main_logo.svg`.
 
 ## CI
 `.github/workflows/ci.yml`: typecheck + Vitest + production frontend build; `cargo fmt --check`, clippy with
