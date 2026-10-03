@@ -3,6 +3,7 @@
 ## Status
 Accepted; supersedes ADR-0008 and the draft-release distribution in ADR-0005. ADR-0005's native-runner builds and
 unsigned status remain.
+Asset replacement on a repeated tag is superseded by ADR-0010; the stable download URLs and publication model remain.
 
 ## Date
 2026-10-03
