@@ -1,7 +1,14 @@
 // Core
 import { vi } from "vitest";
 // Types
-import type { FileInfo, PdfOptions, PdfReport, RegisterOutcome, SavedFile } from "@/services/fileforgeApi";
+import type {
+  FileInfo,
+  PdfOptions,
+  PdfProgress,
+  PdfReport,
+  RegisterOutcome,
+  SavedFile,
+} from "@/services/fileforgeApi";
 
 /**
  * In-memory stand-in for `@/services/fileforgeApi`. Tests call `dropFiles` / `dragHover` to simulate what the Rust
@@ -17,7 +24,10 @@ export function createApiMock() {
       skipped: [],
     })),
     removeFile: vi.fn(async (_id: number) => {}),
-    compressPdf: vi.fn<(id: number, options: PdfOptions) => Promise<PdfReport>>(async (id) => report(id)),
+    compressPdf: vi.fn<
+      (id: number, options: PdfOptions, onProgress?: (progress: PdfProgress) => void) => Promise<PdfReport>
+    >(async (id) => report(id)),
+    cancelCompression: vi.fn(async () => {}),
     saveResult: vi.fn<(id: number) => Promise<string | null>>(async () => null),
     saveResultsToFolder: vi.fn<(ids: number[]) => Promise<SavedFile[] | null>>(async () => null),
     revealResult: vi.fn(async (_id: number) => {}),

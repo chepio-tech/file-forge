@@ -141,6 +141,11 @@ function PdfCompress({ tool, active }: ToolPanelProps) {
               {jobs.savingAll ? messages.pdf.saving : messages.pdf.saveAll(savable)}
             </button>
           ) : null}
+          {jobs.running ? (
+            <button type="button" className="button" disabled={jobs.cancelling} onClick={jobs.cancel}>
+              {jobs.cancelling ? messages.pdf.cancelling : messages.pdf.cancel}
+            </button>
+          ) : null}
           <button
             type="button"
             className="button button--primary"

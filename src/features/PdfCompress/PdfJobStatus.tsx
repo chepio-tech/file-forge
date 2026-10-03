@@ -19,19 +19,25 @@ interface PdfJobStatusProps {
   onReveal: (id: FileId) => void;
 }
 
-/** The per-file cells of the PDF list: progress, result size and ratio, save actions. */
+/** The per-file cells of the PDF list: stage progress, result size and ratio, save actions. */
 function PdfJobStatus({ id, job, busy, saving, onSave, onReveal }: PdfJobStatusProps) {
   if (!job) return null;
   switch (job.status) {
     case "waiting":
       return <span className="pdf-job pdf-job--muted">{messages.pdf.waiting}</span>;
-    case "working":
+    case "working": {
+      const { progress } = job;
       return (
         <span className="pdf-job pdf-job--muted">
           <Spinner />
-          {messages.pdf.working}
+          {progress
+            ? messages.pdf.stageProgress(messages.pdf.stages[progress.stage], progress.done, progress.total)
+            : messages.pdf.working}
         </span>
       );
+    }
+    case "cancelled":
+      return <span className="pdf-job pdf-job--muted">{messages.pdf.cancelled}</span>;
     case "error":
       return (
         <span className="pdf-job pdf-job--error" title={job.message}>
