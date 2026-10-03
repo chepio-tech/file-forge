@@ -74,6 +74,12 @@ export interface SavedFile {
   name: string;
 }
 
+export interface UpdateStatus {
+  currentVersion: string;
+  /** The newer version the release manifest offers; `null` when this one is current. */
+  availableVersion: string | null;
+}
+
 export type AppErrorCode =
   | "unknownFile"
   | "noResult"
@@ -85,6 +91,9 @@ export type AppErrorCode =
   | "pdfMalformed"
   | "invalidOptions"
   | "cancelled"
+  | "busy"
+  | "unsavedResults"
+  | "update"
   | "io"
   | "internal";
 
@@ -127,6 +136,15 @@ const fileforgeApi = {
 
   /** Shows the last saved copy in the system file manager. */
   revealResult: (id: FileId) => invoke<void>("reveal_result", { id }),
+
+  /** Asks the release manifest whether a newer version exists; nothing is downloaded yet (ADR-0013). */
+  checkForUpdate: () => invoke<UpdateStatus>("check_for_update"),
+
+  /**
+   * Downloads, verifies and installs the update found by the last check, then restarts the app, so it settles only
+   * on failure. Rejects with `busy` while work runs and with `unsavedResults` unless `discardUnsaved`.
+   */
+  installUpdate: (discardUnsaved: boolean) => invoke<void>("install_update", { discardUnsaved }),
 
   /** Files dropped on the window, already registered by Rust. */
   onFilesAdded: (handler: (outcome: RegisterOutcome) => void): Promise<UnlistenFn> =>

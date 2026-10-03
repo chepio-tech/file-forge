@@ -8,6 +8,7 @@ import type {
   PdfReport,
   RegisterOutcome,
   SavedFile,
+  UpdateStatus,
 } from "@/services/fileforgeApi";
 
 /**
@@ -31,6 +32,12 @@ export function createApiMock() {
     saveResult: vi.fn<(id: number) => Promise<string | null>>(async () => null),
     saveResultsToFolder: vi.fn<(ids: number[]) => Promise<SavedFile[] | null>>(async () => null),
     revealResult: vi.fn(async (_id: number) => {}),
+    checkForUpdate: vi.fn<() => Promise<UpdateStatus>>(async () => ({
+      currentVersion: "0.1.0",
+      availableVersion: null,
+    })),
+    // The real command restarts the app on success and never settles.
+    installUpdate: vi.fn<(discardUnsaved: boolean) => Promise<void>>(() => new Promise(() => {})),
     onFilesAdded: vi.fn(async (handler: (outcome: RegisterOutcome) => void) => {
       filesAdded = handler;
       return () => {

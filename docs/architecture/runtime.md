@@ -23,6 +23,13 @@ The UI runs files strictly one after another; the work slot enforces the same in
 take the work slot so a result cannot be replaced or deleted while it is being saved. The UI shows pending saves
 and blocks compression, removal and settings changes until the save completes or the dialog is cancelled.
 
+## Updates (ADR-0013)
+The UI calls `check_for_update` once at startup and when the user asks; Rust keeps the found update. On "Restart to
+update", `install_update` refuses early if the work slot is taken or results are unsaved, downloads and verifies
+the artifact without holding the slot, then takes the slot, checks again, installs and restarts. The slot stays held
+until the process exits, so no compression or save starts in between. Restart goes through `RunEvent::Exit`, which
+clears temp results; on Windows the plugin exits from the installer hook, which clears them first.
+
 ## Limits (bounded resources)
 | Resource | Limit | Where |
 |---|---|---|
@@ -49,6 +56,11 @@ Peak memory ≈ input + parsed document + up to 4 decoded bitmaps.
 | Destination does not support hard links | Batch save returns `io`; use individual saves or a supported filesystem |
 | File manager cannot reveal a saved result | UI notice; the saved result remains available |
 | App quits | Temp results are deleted (`RunEvent::Exit`); also cleared at the next start |
+| Offline or GitHub unreachable at startup | Update check times out after 15 s and the UI stays quiet; a manual check says so |
+| Update download stalls | `update` after 10 min; nothing installed, results kept |
+| Update signature or signed version invalid | `update`; nothing installed (ADR-0013) |
+| Restart to update while work runs | `busy`; the update stays available |
+| Restart to update with unsaved results | `unsavedResults`; the UI asks before installing with `discardUnsaved` |
 
 No network, no retries, no timeouts needed: everything is local and user-initiated.
 

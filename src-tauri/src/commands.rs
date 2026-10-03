@@ -18,6 +18,7 @@ use crate::error::AppError;
 use crate::file_registry::{FileId, FileRegistry, RegisterOutcome};
 use crate::job_control::{Cancellation, JobControl};
 use crate::results::{ResultStore, copy_result, copy_result_to_folder, output_name};
+use crate::updates::{self, UpdateStatus};
 
 /// Opens the native "open files" dialog filtered to `kinds` and registers the picked files.
 /// Returns an empty outcome when the user cancels.
@@ -161,6 +162,19 @@ pub async fn save_results_to_folder(app: AppHandle, ids: Vec<FileId>) -> Result<
 pub fn reveal_result(app: AppHandle, results: State<'_, ResultStore>, id: FileId) -> Result<(), AppError> {
     let path = results.get(id).and_then(|result| result.saved_path).ok_or(AppError::NoResult(id))?;
     app.opener().reveal_item_in_dir(path).map_err(|error| AppError::Io(error.to_string()))
+}
+
+/// Asks the release manifest whether a newer version exists (ADR-0013). Nothing is downloaded yet.
+#[tauri::command]
+pub async fn check_for_update(app: AppHandle) -> Result<UpdateStatus, AppError> {
+    updates::check(&app).await
+}
+
+/// Downloads, verifies and installs the update found by the last check, then restarts the app, so it settles only
+/// on failure. Refuses with `busy` while work runs and with `unsavedResults` unless `discard_unsaved`.
+#[tauri::command]
+pub async fn install_update(app: AppHandle, discard_unsaved: bool) -> Result<(), AppError> {
+    updates::install(app, discard_unsaved).await
 }
 
 fn display_name(path: &std::path::Path) -> String {

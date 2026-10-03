@@ -3,6 +3,7 @@ import { useState } from "react";
 // Components
 import ChepioTechFooter from "@/components/ChepioTechFooter/ChepioTechFooter";
 import Sidebar from "@/components/Sidebar/Sidebar";
+import UpdateStatus from "@/components/UpdateStatus/UpdateStatus";
 // Types
 import type { ToolId } from "@/features/featureCatalog";
 // Styles
@@ -18,7 +19,12 @@ function App() {
 
   return (
     <div className="app">
-      <Sidebar groups={featureCatalog} activeTool={activeTool} onSelect={setActiveTool} />
+      <Sidebar
+        groups={featureCatalog}
+        activeTool={activeTool}
+        onSelect={setActiveTool}
+        footer={<UpdateStatus />}
+      />
       <main className="app__main">
         {readyTools.map((tool) => {
           const Panel = toolPanels[tool.id];

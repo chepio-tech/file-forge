@@ -6,8 +6,12 @@
    crash the app (ADR-0004).
 2. **Webview → shell.** The webview is treated as less trusted than Rust. It holds no filesystem or dialog
    permissions and passes only ids (ADR-0004).
-3. **App → network.** None. The only outbound action is opening `https://chepio.tech` in the system browser,
-   allow-listed in `src-tauri/capabilities/default.json`. Files are never uploaded.
+3. **App → network.** Only the update check and download (ADR-0013): HTTPS GETs from Rust to the
+   `chepio-tech/file-forge` GitHub releases, sending no files, names or identifiers. Opening `https://chepio.tech`
+   in the system browser is allow-listed in `src-tauri/capabilities/default.json`. Files are never uploaded.
+4. **Release → installed app.** An update is installed only if its minisign signature verifies with
+   `plugins.updater.pubkey` and is bound to the version the manifest announces (`requireSignedVersion`). The webview
+   cannot choose what is installed: it only asks Rust to check or to install the update Rust found.
 
 ## Webview hardening
 - CSP in `src-tauri/tauri.conf.json`: `default-src 'self'`, IPC only, images from self/data. No remote scripts.

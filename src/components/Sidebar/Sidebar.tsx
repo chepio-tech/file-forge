@@ -1,3 +1,5 @@
+// Core
+import type { ReactNode } from "react";
 // Components
 import Icon from "@/components/Icon/Icon";
 // Types
@@ -11,9 +13,11 @@ interface SidebarProps {
   groups: GroupDefinition[];
   activeTool: ToolId;
   onSelect: (tool: ToolId) => void;
+  /** Pinned below the tool list. */
+  footer?: ReactNode;
 }
 
-function Sidebar({ groups, activeTool, onSelect }: SidebarProps) {
+function Sidebar({ groups, activeTool, onSelect, footer }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar__brand" data-tauri-drag-region>
@@ -67,6 +71,7 @@ function Sidebar({ groups, activeTool, onSelect }: SidebarProps) {
           </section>
         ))}
       </nav>
+      {footer}
     </aside>
   );
 }

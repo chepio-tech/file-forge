@@ -7,7 +7,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError, TryLockError};
 
 // Types
 use crate::file_registry::FileId;
@@ -68,6 +68,20 @@ impl ResultStore {
 
     pub fn work_slot(&self) -> MutexGuard<'_, ()> {
         self.work.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The work slot if nothing holds it: `None` while a compression, save or removal runs.
+    pub fn try_work_slot(&self) -> Option<MutexGuard<'_, ()>> {
+        match self.work.try_lock() {
+            Ok(slot) => Some(slot),
+            Err(TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+            Err(TryLockError::WouldBlock) => None,
+        }
+    }
+
+    /// Results that would be lost on exit: compressed but never saved.
+    pub fn unsaved_count(&self) -> usize {
+        self.lock().values().filter(|result| result.saved_path.is_none()).count()
     }
 
     /// Plain data without cross-field invariants: recovering from a poisoned lock is safe.
@@ -282,6 +296,30 @@ mod tests {
         store.remove(1);
         assert!(store.get(1).is_none());
         assert!(!stored.temp_path.exists());
+    }
+
+    #[test]
+    fn the_work_slot_is_only_offered_when_free() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = ResultStore::open(dir.path().join("results")).expect("opens");
+        let slot = store.work_slot();
+        assert!(store.try_work_slot().is_none());
+        drop(slot);
+        assert!(store.try_work_slot().is_some());
+    }
+
+    #[test]
+    fn only_results_never_saved_count_as_unsaved() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let store = ResultStore::open(dir.path().join("results")).expect("opens");
+        assert_eq!(store.unsaved_count(), 0);
+        store.put(1, b"%PDF-1").expect("stores");
+        store.put(2, b"%PDF-2").expect("stores");
+        assert_eq!(store.unsaved_count(), 2);
+        store.mark_saved(1, dir.path().join("1.pdf"));
+        assert_eq!(store.unsaved_count(), 1);
+        store.remove(2);
+        assert_eq!(store.unsaved_count(), 0);
     }
 
     #[test]
