@@ -1,0 +1,169 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: calc(var(--titlebar-height) + var(--space-3)) var(--space-3) var(--space-3);
+  border-right: 1px solid var(--line);
+  background: var(--surface-sidebar);
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-4);
+}
+
+.sidebar__logo {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.sidebar__name {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.sidebar__nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar__group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  padding: 0 var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* The group's sheet from the app icon: a tiny rounded page with a folded corner. */
+.sidebar__swatch {
+  flex: none;
+  width: 0.5625rem;
+  height: 0.6875rem;
+  border-radius: 2px 3px 2px 2px;
+  background: var(--group-color);
+  clip-path: polygon(0 0, 62% 0, 100% 32%, 100% 100%, 0 100%);
+}
+
+.sidebar__group--documents {
+  --group-color: var(--group-documents);
+}
+.sidebar__group--images {
+  --group-color: var(--group-images);
+}
+.sidebar__group--video {
+  --group-color: var(--group-video);
+}
+.sidebar__group--audio {
+  --group-color: var(--group-audio);
+}
+
+.sidebar__tools {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sidebar__tool {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 1.875rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.sidebar__tool svg {
+  flex: none;
+  color: var(--ink-muted);
+}
+
+button.sidebar__tool:hover {
+  background: var(--tint);
+}
+
+.sidebar__tool--active,
+button.sidebar__tool--active:hover {
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+
+.sidebar__tool--active svg {
+  color: var(--accent);
+}
+
+.sidebar__tool-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__tool--soon {
+  color: var(--ink-faint);
+}
+
+.sidebar__tool--soon svg {
+  color: var(--ink-faint);
+}
+
+.sidebar__badge {
+  flex: none;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.sidebar__language {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  margin: var(--space-3) var(--space-2) 0;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+}
+
+.sidebar__language-option {
+  height: 1.375rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.sidebar__language-option[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.12);
+}

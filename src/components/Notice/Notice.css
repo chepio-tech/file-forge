@@ -1,0 +1,37 @@
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border: 1px solid color-mix(in oklch, var(--warning-ink) 25%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--warning-surface);
+  color: var(--warning-ink);
+  animation: notice-in var(--duration-base) var(--ease-out);
+}
+
+.notice__icon {
+  flex: none;
+  margin-top: 0.4375rem;
+}
+
+.notice__messages {
+  flex: 1;
+  padding-block: 0.3125rem;
+}
+
+.notice__message {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.notice .button--ghost {
+  color: inherit;
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

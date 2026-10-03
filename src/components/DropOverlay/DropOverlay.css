@@ -1,0 +1,32 @@
+.drop-overlay {
+  position: absolute;
+  inset: var(--space-2);
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklch, var(--surface) 82%, var(--accent));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.drop-overlay--visible {
+  opacity: 1;
+}
+
+.drop-overlay__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--accent);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  transform: translateY(4px);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.drop-overlay--visible .drop-overlay__label {
+  transform: none;
+}

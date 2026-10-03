@@ -1,0 +1,16 @@
+[package]
+name = "fileforge-core"
+description = "File processing engines for FileForge, free of any UI or Tauri dependency"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
