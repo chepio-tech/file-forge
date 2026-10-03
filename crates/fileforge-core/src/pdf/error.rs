@@ -16,6 +16,9 @@ pub enum PdfError {
     Malformed(String),
     #[error("invalid options: {0}")]
     InvalidOptions(String),
+    /// The caller's [`super::Control`] asked to stop; nothing was produced.
+    #[error("the compression was cancelled")]
+    Cancelled,
     /// The rewritten document failed verification; the original is untouched.
     #[error("internal error: {0}")]
     Internal(String),

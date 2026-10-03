@@ -10,6 +10,7 @@ use jpeg_encoder::{ColorType, Encoder};
 use lopdf::{Document, Object, ObjectId, Stream};
 use rayon::prelude::*;
 // Domain
+use super::control::{Control, Counter, Stage};
 use super::limits::Limits;
 use super::objects::{dict_integer, dict_name, filters, resolve};
 use super::options::ImageOptions;
@@ -70,6 +71,7 @@ pub(crate) fn optimize_images(
     options: &ImageOptions,
     sizes: &HashMap<ObjectId, DisplaySize>,
     limits: &Limits,
+    control: &dyn Control,
 ) -> ImageStats {
     let mut stats = ImageStats::default();
     let candidates: Vec<Candidate> = doc
@@ -88,12 +90,21 @@ pub(crate) fn optimize_images(
         })
         .collect();
 
+    let counter = Counter::start(control, Stage::Images, candidates.len());
     let encode_all = || -> Vec<Option<Replacement>> {
         candidates
             .par_iter()
-            .map(|candidate| match doc.objects.get(&candidate.id) {
-                Some(Object::Stream(stream)) => encode(stream, candidate, options, limits),
-                _ => None,
+            .map(|candidate| {
+                // The caller discards the document once cancelled, so remaining images are not worth decoding.
+                if control.is_cancelled() {
+                    return None;
+                }
+                let replacement = match doc.objects.get(&candidate.id) {
+                    Some(Object::Stream(stream)) => encode(stream, candidate, options, limits),
+                    _ => None,
+                };
+                counter.advance();
+                replacement
             })
             .collect()
     };

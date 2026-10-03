@@ -32,6 +32,9 @@ pub enum AppError {
     PdfMalformed(String),
     #[error("invalid options: {0}")]
     InvalidOptions(String),
+    /// The user cancelled the compression; nothing was stored.
+    #[error("the compression was cancelled")]
+    Cancelled,
     #[error("i/o error: {0}")]
     Io(String),
     /// A background task panicked or was cancelled, or a result failed verification; the app keeps running.
@@ -47,6 +50,7 @@ impl From<PdfError> for AppError {
             PdfError::Signed => Self::PdfSigned,
             PdfError::Malformed(detail) => Self::PdfMalformed(detail),
             PdfError::InvalidOptions(detail) => Self::InvalidOptions(detail),
+            PdfError::Cancelled => Self::Cancelled,
             PdfError::Internal(detail) => Self::Internal(detail),
         }
     }
@@ -76,6 +80,8 @@ mod tests {
         assert_eq!(json, Some(serde_json::json!({ "code": "pdfSigned" })));
         let json = serde_json::to_value(AppError::OriginalTarget).ok();
         assert_eq!(json, Some(serde_json::json!({ "code": "originalTarget" })));
+        let json = serde_json::to_value(AppError::Cancelled).ok();
+        assert_eq!(json, Some(serde_json::json!({ "code": "cancelled" })));
     }
 
     #[test]
@@ -83,5 +89,6 @@ mod tests {
         assert!(matches!(AppError::from(PdfError::Encrypted), AppError::PdfEncrypted));
         assert!(matches!(AppError::from(PdfError::TooLarge { limit: 5 }), AppError::PdfTooLarge(5)));
         assert!(matches!(AppError::from(PdfError::Malformed("x".into())), AppError::PdfMalformed(d) if d == "x"));
+        assert!(matches!(AppError::from(PdfError::Cancelled), AppError::Cancelled));
     }
 }

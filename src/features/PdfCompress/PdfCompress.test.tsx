@@ -144,7 +144,11 @@ describe("PdfCompress compression", () => {
     expect(screen.getByRole("button", { name: "Compressing 1 of 2…" })).toBeDisabled();
     expect(screen.getByText("Waiting")).toBeInTheDocument();
     expect(api().api.compressPdf).toHaveBeenCalledTimes(1);
-    expect(api().api.compressPdf).toHaveBeenCalledWith(1, { images: { jpegQuality: 85, maxDpi: 200 } });
+    expect(api().api.compressPdf).toHaveBeenCalledWith(
+      1,
+      { images: { jpegQuality: 85, maxDpi: 200 } },
+      expect.any(Function),
+    );
 
     await act(async () => release());
 
@@ -286,7 +290,11 @@ describe("PdfCompress compression", () => {
     expect(screen.getByText(/Settings changed since the last run/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
-    expect(api().api.compressPdf).toHaveBeenLastCalledWith(1, { images: { jpegQuality: 95, maxDpi: 150 } });
+    expect(api().api.compressPdf).toHaveBeenLastCalledWith(
+      1,
+      { images: { jpegQuality: 95, maxDpi: 150 } },
+      expect.any(Function),
+    );
   });
 
   it("lets an empty Max DPI keep image resolution", async () => {
@@ -297,7 +305,103 @@ describe("PdfCompress compression", () => {
     await userEvent.tab();
     await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
 
-    expect(api().api.compressPdf).toHaveBeenCalledWith(1, { images: { jpegQuality: 85, maxDpi: null } });
+    expect(api().api.compressPdf).toHaveBeenCalledWith(
+      1,
+      { images: { jpegQuality: 85, maxDpi: null } },
+      expect.any(Function),
+    );
     expect(screen.getByText(/Image resolution is kept/)).toBeInTheDocument();
+  });
+});
+
+describe("PdfCompress progress and cancellation", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  type ProgressHandler = Parameters<ReturnType<typeof createApiMock>["api"]["compressPdf"]>[2];
+
+  async function withFiles(...files: ReturnType<typeof file>[]) {
+    render(<PdfCompress tool={tool} active />);
+    await waitFor(() => expect(api().isListeningForDrops()).toBe(true));
+    act(() => api().dropFiles({ files, skipped: [] }));
+  }
+
+  /** The next `compressPdf` call stays pending until the test settles it. */
+  function pendingCompression() {
+    const call = {
+      progress: (() => {}) as NonNullable<ProgressHandler>,
+      finish: () => {},
+      fail: (_error: unknown) => {},
+    };
+    api().api.compressPdf.mockImplementationOnce(
+      (id, _options, onProgress) =>
+        new Promise((resolve, reject) => {
+          call.progress = onProgress ?? (() => {});
+          call.finish = () => resolve(report(id));
+          call.fail = reject;
+        }),
+    );
+    return call;
+  }
+
+  it("shows the stage of the file being compressed, with counts where known", async () => {
+    await withFiles(file(1, "scan.pdf"));
+    const call = pendingCompression();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    expect(screen.getByText("Compressing…")).toBeInTheDocument();
+
+    act(() => call.progress({ stage: "images", done: 3, total: 12 }));
+    expect(screen.getByText("Images 3 of 12")).toBeInTheDocument();
+    act(() => call.progress({ stage: "saving", done: 0, total: 0 }));
+    expect(screen.getByText("Writing…")).toBeInTheDocument();
+
+    await act(async () => call.finish());
+    act(() => call.progress({ stage: "verifying", done: 0, total: 0 }));
+
+    expect(screen.getByText("→ 400 kB")).toBeInTheDocument();
+    expect(screen.queryByText("Verifying…")).not.toBeInTheDocument();
+  });
+
+  it("cancels the run: keeps finished results, marks the current file and leaves later files untouched", async () => {
+    await withFiles(file(1, "a.pdf"), file(2, "b.pdf"), file(3, "c.pdf"));
+    api().api.compressPdf.mockResolvedValueOnce(report(1));
+    const second = pendingCompression();
+    let stopped: () => void = () => {};
+    api().api.cancelCompression.mockImplementationOnce(async () => {
+      stopped = () => second.fail({ code: "cancelled" });
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Compress 3 files" }));
+    await screen.findByRole("button", { name: "Compressing 2 of 3…" });
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(api().api.cancelCompression).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Cancelling…" })).toBeDisabled();
+    await act(async () => stopped());
+
+    expect(await screen.findByText("Cancelled")).toBeInTheDocument();
+    expect(screen.getByText("→ 400 kB")).toBeInTheDocument();
+    expect(screen.queryByText("Waiting")).not.toBeInTheDocument();
+    expect(api().api.compressPdf).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Cancel/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compress 3 files" })).toBeEnabled();
+  });
+
+  it("stops after the current file even when the cancel arrives too late or fails", async () => {
+    await withFiles(file(1, "a.pdf"), file(2, "b.pdf"));
+    const first = pendingCompression();
+    api().api.cancelCompression.mockRejectedValueOnce({ code: "io" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Compress 2 files" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await act(async () => first.finish());
+
+    expect(await screen.findByText("→ 400 kB")).toBeInTheDocument();
+    expect(api().api.compressPdf).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Waiting")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("The file could not be read or written.");
+    expect(screen.getByRole("button", { name: "Compress 2 files" })).toBeEnabled();
   });
 });

@@ -75,7 +75,8 @@ see [deployment](docs/architecture/deployment.md).
 ## Current limits
 
 - PDF inputs are limited to 1 GiB; compression runs one document at a time.
-- A running document cannot be cancelled yet. Folder drops are skipped.
+- Cancel stops a running document at its next checkpoint; parsing and saving a document are not interrupted.
+  Folder drops are skipped.
 - Unsupported image encodings are preserved; lossy presets do not guarantee additional savings on every PDF.
 - Batch saving requires a destination filesystem that supports hard links (for example APFS, NTFS or ext4).
 - The application's license has not been chosen. Dependency licenses remain their respective authors' licenses.

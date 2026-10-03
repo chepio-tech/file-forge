@@ -5,12 +5,14 @@ mod commands;
 mod drag_drop;
 mod error;
 mod file_registry;
+mod job_control;
 mod results;
 
 // Core
 use tauri::{Manager, RunEvent};
 // Types
 use crate::file_registry::FileRegistry;
+use crate::job_control::Cancellation;
 use crate::results::ResultStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -19,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(FileRegistry::default())
+        .manage(Cancellation::default())
         .setup(|app| {
             let dir = app.path().app_cache_dir()?.join("results");
             app.manage(ResultStore::open(dir)?);
@@ -28,6 +31,7 @@ pub fn run() {
             commands::pick_files,
             commands::remove_file,
             commands::compress_pdf,
+            commands::cancel_compression,
             commands::save_result,
             commands::save_results_to_folder,
             commands::reveal_result,
