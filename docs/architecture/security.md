@@ -17,7 +17,8 @@
 ## Data handling
 - Registry entries and temp results live for the session only and are not persisted.
 - Originals are opened read-only; input paths stay protected for the whole session, even when removed from the
-  list. Save destinations are resolved on the Rust side and refused if they refer to any protected input.
+  list. Save destinations are resolved on the Rust side and refused if they refer to any protected input. On Unix,
+  device/inode identity also protects hard links and macOS filename case variants that canonical paths can miss.
 
 ## Untrusted PDFs
 Limits on file size, decoded stream size and image pixels (`docs/architecture/runtime.md`); encrypted and signed

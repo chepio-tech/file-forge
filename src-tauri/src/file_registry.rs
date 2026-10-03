@@ -7,6 +7,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -53,6 +55,9 @@ struct Inner {
     files: HashMap<FileId, RegisteredFile>,
     /// Keep input paths protected for the entire session, even after removal from the UI.
     originals: HashSet<PathBuf>,
+    /// `realpath` can preserve the requested letter case on a case-insensitive macOS volume.
+    #[cfg(unix)]
+    original_file_ids: HashSet<(u64, u64)>,
 }
 
 impl FileRegistry {
@@ -85,6 +90,8 @@ impl FileRegistry {
         inner.next_id += 1;
         let info = FileInfo { id: inner.next_id, name: display_name(&path), size: metadata.len(), kind };
         inner.originals.insert(path.clone());
+        #[cfg(unix)]
+        inner.original_file_ids.insert((metadata.dev(), metadata.ino()));
         inner.files.insert(info.id, RegisteredFile { path, info: info.clone() });
         Ok(info)
     }
@@ -95,6 +102,12 @@ impl FileRegistry {
 
     /// Resolve aliases before saving so a native dialog cannot overwrite any input file.
     pub fn check_save_target(&self, target: &Path) -> Result<(), AppError> {
+        #[cfg(unix)]
+        if let Ok(metadata) = target.metadata()
+            && self.lock().original_file_ids.contains(&(metadata.dev(), metadata.ino()))
+        {
+            return Err(AppError::OriginalTarget);
+        }
         let resolved = match target.canonicalize() {
             Ok(path) => path,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -229,5 +242,34 @@ mod tests {
         registry.register(original).expect("input");
 
         assert!(matches!(registry.check_save_target(&alias), Err(AppError::OriginalTarget)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_to_a_hard_link_of_an_input_is_refused() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let original = write(dir.path(), "input.pdf", b"%PDF-original");
+        let alias = dir.path().join("hard-link.pdf");
+        std::fs::hard_link(&original, &alias).expect("hard link");
+        let registry = FileRegistry::default();
+        registry.register(original).expect("input");
+
+        assert!(matches!(registry.check_save_target(&alias), Err(AppError::OriginalTarget)));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn saving_to_a_case_variant_of_an_input_is_refused_on_insensitive_volumes() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let original = write(dir.path(), "input.pdf", b"%PDF-original");
+        let alias = dir.path().join("INPUT.pdf");
+        let registry = FileRegistry::default();
+        registry.register(original).expect("input");
+
+        if alias.exists() {
+            assert!(matches!(registry.check_save_target(&alias), Err(AppError::OriginalTarget)));
+        } else {
+            assert!(registry.check_save_target(&alias).is_ok());
+        }
     }
 }

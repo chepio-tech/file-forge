@@ -4,7 +4,7 @@ Rules the code must keep. Each has a test; change the test and this file togethe
 
 | Invariant | Why | Enforced by |
 |---|---|---|
-| Originals are never written. Results live in a temp file until the user saves them. Save dialogs refuse all session input paths. | Users must be able to trust the tool with their only copy. | `file_registry.rs` → `saving_cannot_overwrite_any_input_even_after_removal`, `saving_through_an_alias_to_an_input_is_refused`; `results.rs` (store + atomic copy) |
+| Originals are never written. Results live in a temp file until the user saves them. Save dialogs refuse all session inputs, including aliases and macOS case variants. | Users must be able to trust the tool with their only copy. | `file_registry.rs` → save-target tests for removed inputs, symbolic/hard links and case variants; `results.rs` (store + atomic copy) |
 | A result is never larger than its input; otherwise the output is the original, byte for byte (`keptOriginal`). | "Compress" must never make a file worse. | `crates/fileforge-core/tests/pdf_compress.rs` → `output_is_never_larger…`, `corrupted_files_never_panic_and_never_grow` |
 | Lossless keeps decoded content identical: page content streams and image bytes are unchanged. | ADR-0003: lossless means lossless. | `lossless_shrinks_structure_and_keeps_every_byte_of_content` |
 | Encrypted PDFs are refused, including owner-password-only files that open without a password. | Rewriting would silently drop the protection. | `encrypted_pdfs_are_refused_even_without_a_user_password` |

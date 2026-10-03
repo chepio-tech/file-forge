@@ -18,7 +18,7 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
   `{ images: { jpegQuality, maxDpi | null } }`. Ranges are defined in `crates/fileforge-core/src/pdf/options.rs`
   and validated there; the UI mirrors them in `src/features/PdfCompress/pdfPresets.ts`.
 - `save_result(id)` — native save dialog next to the original → saved file name, or `null` if cancelled.
-  Choosing any session input (including aliases and files removed from the list) returns `originalTarget`.
+  Choosing any session input (including aliases, macOS case variants and files removed from the list) returns `originalTarget`.
 - `save_results_to_folder(ids)` — folder picker, `<name>-compressed.pdf` without overwriting → `SavedFile[]` or `null`.
 - `reveal_result(id)` — show the last saved copy in the file manager.
 - Event `files-added` — files dropped on the window, already registered → `RegisterOutcome`.

@@ -41,7 +41,7 @@ Rust result saving and input reads, PDF UI failure handling, README, CI, state a
 Revert the completion commit; no data migrations or new dependencies are involved.
 
 ## Progress
-Implementation, docs, 36 frontend tests, 50 Rust tests, typecheck, production build, format and clippy are green.
+Implementation, docs, 36 frontend tests, 52 macOS Rust tests, typecheck, production build, format and clippy are green.
 The macOS Apple Silicon app/DMG builds; native intake/compression/safe save/batch save checks passed. Remaining:
 commit, push and verify remote CI.
 
@@ -50,3 +50,5 @@ commit, push and verify remote CI.
   README now use the canonical URL.
 - Existing SSH authentication works; no new SSH key or secret was needed.
 - Safe result publication and its filesystem tradeoff are recorded in ADR-0006.
+- macOS canonical paths retain requested filename casing on the tested case-insensitive volume. Original
+  protection also compares Unix device/inode identities (ADR-0007); case-variant and hard-link tests cover this.

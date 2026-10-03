@@ -16,7 +16,8 @@ _Updated: 2026-10-03_
 - Light and dark themes following the system. Chepio developer credit in the footer.
 - CI workflow (typecheck, Vitest, fmt, clippy, cargo test) and a release workflow building installers for all OSes.
 - Safe saving: all session inputs are protected, including removed files and aliases; batch outputs never overwrite
-  existing files, including simultaneous collisions and broken symbolic links (ADR-0006).
+  existing files, including simultaneous collisions and broken symbolic links (ADR-0006). Unix file identity
+  checks also protect hard-link aliases and filename case variants on macOS (ADR-0007).
 - PDF reads remain bounded if an input grows after registration. Saving/removal/compression are serialized in Rust;
   the UI shows pending saves and reports save/reveal errors without discarding results.
 - README with platform download navigation, source-build commands, feature scope and current limits.
@@ -39,7 +40,7 @@ _Updated: 2026-10-03_
 
 ## Verification (2026-10-03)
 - `pnpm typecheck`, `pnpm test` (36 tests), `pnpm build`: passed.
-- `cargo fmt --all -- --check`, clippy with `-D warnings`, locked workspace tests (50 tests): passed.
+- `cargo fmt --all -- --check`, clippy with `-D warnings`, locked workspace tests (52 tests on macOS): passed.
 - `pnpm tauri build`: macOS Apple Silicon `.app` and `.dmg` built successfully.
 - Native app smoke test on a generated PDF: pick → lossless compression (74,600 → 825 bytes) → refused original
   overwrite → individual save → numbered batch save. Original checksum unchanged; output copies identical;
