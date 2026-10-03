@@ -110,12 +110,22 @@ describe("native installer branding", () => {
   it("keeps the native MSI title and welcome text areas clear of artwork", () => {
     const banner = bitmap(bundle.windows.wix.bannerPath, 986, 116);
     const dialog = bitmap(bundle.windows.wix.dialogImagePath, 986, 624);
-    for (let y = 0; y < 116; y++) {
-      for (let x = 0; x < 660; x++) expect(banner.pixel(x, y)).toEqual([255, 255, 255]);
-    }
-    for (let y = 0; y < 624; y++) {
-      for (let x = 328; x < 986; x++) expect(dialog.pixel(x, y)).toEqual([255, 255, 255]);
-    }
+    const verifyWhiteArea = (image: ReturnType<typeof bitmap>, left: number, top: number, right: number, bottom: number) => {
+      let coloredPixels = 0;
+      let firstColoredPixel: { x: number; y: number } | undefined;
+      for (let y = top; y < bottom; y++) {
+        for (let x = left; x < right; x++) {
+          const [red, green, blue] = image.pixel(x, y);
+          if (red !== 255 || green !== 255 || blue !== 255) {
+            coloredPixels++;
+            firstColoredPixel ??= { x, y };
+          }
+        }
+      }
+      expect({ coloredPixels, firstColoredPixel }).toEqual({ coloredPixels: 0, firstColoredPixel: undefined });
+    };
+    verifyWhiteArea(banner, 0, 0, 660, 116);
+    verifyWhiteArea(dialog, 328, 0, 986, 624);
     expect(bundle.publisher).toBe("Chepio.tech");
     expect(bundle.homepage).toBe("https://chepio.tech");
   });
