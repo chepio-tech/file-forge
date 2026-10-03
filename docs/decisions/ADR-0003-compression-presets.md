@@ -24,7 +24,7 @@ Honest naming plus visible numbers lets professionals choose; safe defaults prot
 
 ## Alternatives considered
 - Lossless only: honest but often useless for scans and photo-heavy files.
-- A single "smart" mode: hides what changed, which conflicts with "numbers over adjectives" (`docs/PRODUCT.md`).
+- A single "smart" mode: hides what changed, which conflicts with "numbers over adjectives".
 
 ## Consequences
 - Each engine needs a lossless path and a parameterized lossy path, plus tests for both guarantees.

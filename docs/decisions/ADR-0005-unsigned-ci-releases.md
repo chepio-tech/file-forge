@@ -1,7 +1,7 @@
 # ADR-0005: Installers built by GitHub Actions, unsigned until certificates exist
 
 ## Status
-Accepted
+Accepted; distribution through draft GitHub releases superseded by ADR-0009 (published releases).
 
 ## Date
 2026-10-03

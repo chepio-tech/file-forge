@@ -1,7 +1,7 @@
 /*
  * Design tokens and app shell. Tokens are the only place raw colors live; components use the variables.
  * Palette: restrained tinted neutrals (hue 255, the icon's blue) + one accent; the four icon sheet colors mark the
- * file-type groups only. Light and dark follow the system. Intent and principles: docs/PRODUCT.md.
+ * file-type groups only. Light and dark follow the system.
  */
 
 :root {

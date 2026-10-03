@@ -41,7 +41,7 @@ Peak memory ≈ input + parsed document + up to 4 decoded bitmaps.
 | App quits | Temp results are deleted (`RunEvent::Exit`); also cleared at the next start |
 
 No network, no retries, no timeouts needed: everything is local and user-initiated. Cancellation of a running
-compression is not supported yet (ROADMAP).
+compression is not supported yet.
 
 ## Measured (Apple M-series, release build, 2026-10-03)
 | File | Lossless | Balanced | Maximum |
