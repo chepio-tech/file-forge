@@ -51,6 +51,10 @@ const messages = {
       maxDpi === null
         ? `JPEG images re-encoded at quality ${quality}. Image resolution is kept.`
         : `JPEG images re-encoded at quality ${quality}. Images shown above ${maxDpi} DPI are downsampled.`,
+    stripMetadata: "Remove metadata and thumbnails",
+    stripMetadataHint: "Author, software, dates, XMP and page thumbnails. PDF/A, PDF/UA and PDF/X keep what they require.",
+    stripEditingData: "Remove editing data",
+    stripEditingDataHint: "Private Illustrator and Photoshop data. Those apps can no longer edit the file natively.",
     jpegQuality: "JPEG quality",
     maxDpi: "Max DPI",
     noLimit: "Keep",
@@ -74,6 +78,7 @@ const messages = {
     stageProgress: (stage: string, done: number, total: number) =>
       total > 0 ? `${stage} ${done} of ${total}` : `${stage}…`,
     alreadyOptimal: "Already optimal",
+    alreadyOptimalNothingRemoved: "Already optimal: original kept, nothing removed",
     reduction: (percent: string) => `−${percent}%`,
     save: "Save…",
     saving: "Saving…",
@@ -81,6 +86,12 @@ const messages = {
     saved: "Saved",
     savedAs: (name: string) => `Saved as ${name}. Click to show it in its folder.`,
     total: (before: string, after: string) => `${before} → ${after}`,
+    removed: {
+      metadata: "metadata removed",
+      keptForStandard: "document metadata kept for PDF/A, PDF/UA or PDF/X",
+      thumbnails: (count: number) => `${count} ${count === 1 ? "thumbnail" : "thumbnails"} removed`,
+      editingData: "editing data removed",
+    },
     details: (pages: number, recompressed: number, downsampled: number, duplicates: number) =>
       [
         `${pages} ${pages === 1 ? "page" : "pages"}`,

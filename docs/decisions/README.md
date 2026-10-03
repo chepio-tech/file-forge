@@ -12,3 +12,4 @@
 | [ADR-0008](ADR-0008-installers-folder.md) | Commit installers to `installers/` under stable names | Superseded by ADR-0009 |
 | [ADR-0009](ADR-0009-github-release-downloads.md) | Publish installers as GitHub release assets under stable names | Accepted |
 | [ADR-0011](ADR-0011-cooperative-cancellation.md) | Cooperative cancellation and channel-based progress for compressions | Accepted |
+| [ADR-0012](ADR-0012-metadata-removal.md) | Optional removal of metadata, thumbnails and editing data | Accepted |

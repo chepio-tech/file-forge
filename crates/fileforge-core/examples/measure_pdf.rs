@@ -10,8 +10,14 @@ use fileforge_core::pdf::{ImageOptions, PdfOptions, compress};
 fn main() {
     let presets = [
         ("lossless", PdfOptions::LOSSLESS),
-        ("balanced", PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }) }),
-        ("maximum", PdfOptions { images: Some(ImageOptions { jpeg_quality: 70, max_dpi: Some(150) }) }),
+        (
+            "balanced",
+            PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }), ..PdfOptions::LOSSLESS },
+        ),
+        (
+            "maximum",
+            PdfOptions { images: Some(ImageOptions { jpeg_quality: 70, max_dpi: Some(150) }), ..PdfOptions::LOSSLESS },
+        ),
     ];
     for path in std::env::args().skip(1) {
         let Ok(input) = std::fs::read(&path) else {

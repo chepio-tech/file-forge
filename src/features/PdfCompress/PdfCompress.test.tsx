@@ -146,7 +146,7 @@ describe("PdfCompress compression", () => {
     expect(api().api.compressPdf).toHaveBeenCalledTimes(1);
     expect(api().api.compressPdf).toHaveBeenCalledWith(
       1,
-      { images: { jpegQuality: 85, maxDpi: 200 } },
+      { images: { jpegQuality: 85, maxDpi: 200 }, stripMetadata: false, stripEditingData: false },
       expect.any(Function),
     );
 
@@ -292,7 +292,7 @@ describe("PdfCompress compression", () => {
     await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
     expect(api().api.compressPdf).toHaveBeenLastCalledWith(
       1,
-      { images: { jpegQuality: 95, maxDpi: 150 } },
+      { images: { jpegQuality: 95, maxDpi: 150 }, stripMetadata: false, stripEditingData: false },
       expect.any(Function),
     );
   });
@@ -307,7 +307,7 @@ describe("PdfCompress compression", () => {
 
     expect(api().api.compressPdf).toHaveBeenCalledWith(
       1,
-      { images: { jpegQuality: 85, maxDpi: null } },
+      { images: { jpegQuality: 85, maxDpi: null }, stripMetadata: false, stripEditingData: false },
       expect.any(Function),
     );
     expect(screen.getByText(/Image resolution is kept/)).toBeInTheDocument();
@@ -403,5 +403,66 @@ describe("PdfCompress progress and cancellation", () => {
     expect(screen.queryByText("Waiting")).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("The file could not be read or written.");
     expect(screen.getByRole("button", { name: "Compress 2 files" })).toBeEnabled();
+  });
+});
+
+describe("PdfCompress metadata and editing data", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  async function withFiles(...files: ReturnType<typeof file>[]) {
+    render(<PdfCompress tool={tool} active />);
+    await waitFor(() => expect(api().isListeningForDrops()).toBe(true));
+    act(() => api().dropFiles({ files, skipped: [] }));
+  }
+
+  it("keeps removal off by default, sends it with any preset and keeps it across preset changes", async () => {
+    await withFiles(file(1, "poster.pdf"));
+    const metadata = screen.getByRole("checkbox", { name: "Remove metadata and thumbnails" });
+    const editing = screen.getByRole("checkbox", { name: "Remove editing data" });
+    expect(metadata).not.toBeChecked();
+    expect(editing).not.toBeChecked();
+    expect(editing).toHaveAccessibleDescription(/can no longer edit the file natively/);
+
+    await userEvent.click(metadata);
+    await userEvent.click(screen.getByRole("radio", { name: "Maximum" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Lossless" }));
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+
+    expect(screen.getByRole("radio", { name: "Lossless" })).toBeChecked();
+    expect(api().api.compressPdf).toHaveBeenCalledWith(
+      1,
+      { images: null, stripMetadata: true, stripEditingData: false },
+      expect.any(Function),
+    );
+  });
+
+  it("flags results as outdated when a removal option changes", async () => {
+    await withFiles(file(1, "poster.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    await screen.findByText("→ 400 kB");
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Remove editing data" }));
+
+    expect(screen.getByText(/Settings changed since the last run/)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Lossless" })).toBeChecked();
+  });
+
+  it("lists what was removed or kept, and says when a kept original removed nothing", async () => {
+    await withFiles(file(1, "poster.pdf"), file(2, "tight.pdf"));
+    api().api.compressPdf.mockResolvedValueOnce(
+      report(1, { metadataRemoved: true, metadataKeptForStandard: true, thumbnailsRemoved: 2, editingDataRemoved: 3 }),
+    );
+    api().api.compressPdf.mockResolvedValueOnce(report(2, { keptOriginal: true, outputSize: 1_000_000 }));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Remove metadata and thumbnails" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Remove editing data" }));
+    await userEvent.click(screen.getByRole("button", { name: "Compress 2 files" }));
+
+    expect(await screen.findByText("Already optimal: original kept, nothing removed")).toBeInTheDocument();
+    const details = screen.getByText("→ 400 kB").getAttribute("title");
+    expect(details).toContain("metadata removed");
+    expect(details).toContain("document metadata kept for PDF/A, PDF/UA or PDF/X");
+    expect(details).toContain("2 thumbnails removed");
+    expect(details).toContain("editing data removed");
   });
 });

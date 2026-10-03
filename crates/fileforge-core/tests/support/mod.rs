@@ -39,13 +39,14 @@ pub struct PdfBuilder {
     pages_id: ObjectId,
     kids: Vec<ObjectId>,
     catalog_extra: Vec<(&'static str, Object)>,
+    info: Option<ObjectId>,
 }
 
 impl Default for PdfBuilder {
     fn default() -> Self {
         let mut doc = Document::with_version("1.4");
         let pages_id = doc.new_object_id();
-        Self { doc, pages_id, kids: Vec::new(), catalog_extra: Vec::new() }
+        Self { doc, pages_id, kids: Vec::new(), catalog_extra: Vec::new(), info: None }
     }
 }
 
@@ -138,6 +139,62 @@ impl PdfBuilder {
         self.catalog_extra.push(("Metadata", metadata.into()));
     }
 
+    /// Document Info dictionary, as authoring tools write it.
+    pub fn info(&mut self, entries: Dictionary) {
+        self.info = Some(self.doc.add_object(entries));
+    }
+
+    /// Catalog XMP packet whose `rdf:Description` carries `properties`.
+    pub fn xmp(&mut self, properties: &str) {
+        let metadata = self.metadata_stream(properties);
+        self.catalog_extra.push(("Metadata", metadata.into()));
+    }
+
+    /// XMP attached to any object, as Photoshop does for placed images.
+    pub fn object_xmp(&mut self, target: ObjectId, properties: &str) {
+        let metadata = self.metadata_stream(properties);
+        self.dict_mut(target).set("Metadata", metadata);
+    }
+
+    pub fn thumbnail(&mut self, page: ObjectId) {
+        let thumbnail = self.raw_image(76, 99);
+        self.dict_mut(page).set("Thumb", thumbnail);
+    }
+
+    /// Illustrator-style private data: `/PieceInfo` → `/Illustrator` → `/Private` → a data stream of about `bytes`.
+    pub fn piece_info(&mut self, target: ObjectId, bytes: u32) {
+        let data =
+            self.doc.add_object(Stream::new(Dictionary::new(), photo(bytes / 3, 1, false)).with_compression(false));
+        let private = self.doc.add_object(dictionary! { "AIPrivateData1" => data });
+        let illustrator = self.doc.add_object(
+            dictionary! { "LastModified" => Object::string_literal("D:20261003120000Z"), "Private" => private },
+        );
+        self.dict_mut(target).set("PieceInfo", dictionary! { "Illustrator" => illustrator });
+    }
+
+    /// Tagged-PDF markers used by screen readers.
+    pub fn structure_tree(&mut self) {
+        let root = self.doc.add_object(dictionary! { "Type" => "StructTreeRoot", "K" => Vec::<Object>::new() });
+        self.catalog_extra.push(("StructTreeRoot", root.into()));
+        self.catalog_extra.push(("MarkInfo", Object::Dictionary(dictionary! { "Marked" => true })));
+    }
+
+    fn metadata_stream(&mut self, properties: &str) -> ObjectId {
+        let xmp = format!(
+            r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description {properties}/></rdf:RDF></x:xmpmeta>"#
+        );
+        let dict = dictionary! { "Type" => "Metadata", "Subtype" => "XML" };
+        self.doc.add_object(Stream::new(dict, xmp.into_bytes()).with_compression(false))
+    }
+
+    fn dict_mut(&mut self, id: ObjectId) -> &mut Dictionary {
+        match self.doc.objects.get_mut(&id).expect("fixture object exists") {
+            Object::Dictionary(dict) => dict,
+            Object::Stream(stream) => &mut stream.dict,
+            other => panic!("fixture object {id:?} has no dictionary: {other:?}"),
+        }
+    }
+
     pub fn build(mut self) -> Document {
         let count = self.kids.len() as i64;
         let pages = dictionary! {
@@ -152,6 +209,9 @@ impl PdfBuilder {
         }
         let catalog_id = self.doc.add_object(catalog);
         self.doc.trailer.set("Root", catalog_id);
+        if let Some(info) = self.info {
+            self.doc.trailer.set("Info", info);
+        }
         self.doc
     }
 

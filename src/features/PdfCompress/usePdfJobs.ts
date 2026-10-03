@@ -11,7 +11,7 @@ import { optionsKey } from "./pdfPresets";
 export type Job =
   | { status: "waiting" }
   | { status: "working"; progress?: PdfProgress }
-  | { status: "done"; report: PdfReport; optionsKey: string; savedName?: string }
+  | { status: "done"; report: PdfReport; optionsKey: string; removalRequested: boolean; savedName?: string }
   | { status: "cancelled" }
   | { status: "error"; message: string };
 
@@ -81,6 +81,7 @@ export function usePdfJobs(files: FileInfo[]): PdfJobs {
       setNotice(null);
       setJobs(new Map(ids.map((id) => [id, { status: "waiting" } as Job])));
       const key = optionsKey(options);
+      const removalRequested = options.stripMetadata || options.stripEditingData;
       try {
         for (const [index, id] of ids.entries()) {
           if (cancelRequested.current) break;
@@ -89,7 +90,7 @@ export function usePdfJobs(files: FileInfo[]): PdfJobs {
           update(id, { status: "working" });
           try {
             const report = await fileforgeApi.compressPdf(id, options, (progress) => showProgress(id, progress));
-            update(id, { status: "done", report, optionsKey: key });
+            update(id, { status: "done", report, optionsKey: key, removalRequested });
           } catch (error) {
             const cancelled = isAppError(error) && error.code === "cancelled";
             update(id, cancelled ? { status: "cancelled" } : { status: "error", message: errorMessage(error) });

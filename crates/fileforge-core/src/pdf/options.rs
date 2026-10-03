@@ -10,11 +10,18 @@ pub const JPEG_QUALITY_RANGE: RangeInclusive<u8> = 30..=95;
 /// Accepted target resolutions in dots per inch. Mirrored in the UI like [`JPEG_QUALITY_RANGE`].
 pub const MAX_DPI_RANGE: RangeInclusive<u16> = 72..=600;
 
-/// What the engine may change. `images: None` is the lossless preset (ADR-0003).
+/// What the engine may change. `images: None` is the lossless preset (ADR-0003). Removing metadata or editing data
+/// is a separate, explicit choice for any preset and never changes how a page looks (ADR-0012).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PdfOptions {
     pub images: Option<ImageOptions>,
+    /// Remove the Info dictionary, XMP metadata and page thumbnails. Standards that require metadata keep it.
+    #[serde(default)]
+    pub strip_metadata: bool,
+    /// Remove `/PieceInfo` (private Illustrator/Photoshop data needed only to edit the file in those apps).
+    #[serde(default)]
+    pub strip_editing_data: bool,
 }
 
 /// Lossy image settings: JPEG images are re-encoded at `jpeg_quality`; images shown at more than `max_dpi` are
@@ -27,7 +34,7 @@ pub struct ImageOptions {
 }
 
 impl PdfOptions {
-    pub const LOSSLESS: Self = Self { images: None };
+    pub const LOSSLESS: Self = Self { images: None, strip_metadata: false, strip_editing_data: false };
 
     pub fn validate(&self) -> Result<(), PdfError> {
         let Some(images) = self.images else { return Ok(()) };
@@ -51,7 +58,7 @@ mod tests {
     use super::*;
 
     fn lossy(jpeg_quality: u8, max_dpi: Option<u16>) -> PdfOptions {
-        PdfOptions { images: Some(ImageOptions { jpeg_quality, max_dpi }) }
+        PdfOptions { images: Some(ImageOptions { jpeg_quality, max_dpi }), ..PdfOptions::LOSSLESS }
     }
 
     #[test]
@@ -75,5 +82,8 @@ mod tests {
         let json = r#"{"images":{"jpegQuality":70,"maxDpi":150}}"#;
         assert_eq!(serde_json::from_str::<PdfOptions>(json).ok(), Some(lossy(70, Some(150))));
         assert_eq!(serde_json::from_str::<PdfOptions>(r#"{"images":null}"#).ok(), Some(PdfOptions::LOSSLESS));
+        let json = r#"{"images":null,"stripMetadata":true,"stripEditingData":false}"#;
+        let stripping = PdfOptions { strip_metadata: true, ..PdfOptions::LOSSLESS };
+        assert_eq!(serde_json::from_str::<PdfOptions>(json).ok(), Some(stripping));
     }
 }

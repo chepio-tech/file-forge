@@ -10,10 +10,11 @@ export const MAX_DPI = { min: 72, max: 600 } as const;
 
 export type PresetId = "lossless" | "balanced" | "maximum" | "custom";
 
+/** Removal options are off in every preset; choosing a preset keeps the user's removal choices. */
 export const PRESETS: Record<Exclude<PresetId, "custom">, PdfOptions> = {
-  lossless: { images: null },
-  balanced: { images: { jpegQuality: 85, maxDpi: 200 } },
-  maximum: { images: { jpegQuality: 70, maxDpi: 150 } },
+  lossless: { images: null, stripMetadata: false, stripEditingData: false },
+  balanced: { images: { jpegQuality: 85, maxDpi: 200 }, stripMetadata: false, stripEditingData: false },
+  maximum: { images: { jpegQuality: 70, maxDpi: 150 }, stripMetadata: false, stripEditingData: false },
 };
 
 export const DEFAULT_PRESET = "lossless" satisfies PresetId;
@@ -24,7 +25,10 @@ export function clamp(value: number, range: { min: number; max: number }): numbe
 
 /** Stable key for "were these results produced with the current settings?". */
 export function optionsKey(options: PdfOptions): string {
-  return options.images ? `${options.images.jpegQuality}/${options.images.maxDpi ?? "keep"}` : "lossless";
+  const images = options.images ? `${options.images.jpegQuality}/${options.images.maxDpi ?? "keep"}` : "lossless";
+  return [images, options.stripMetadata ? "metadata" : "", options.stripEditingData ? "editing" : ""]
+    .filter(Boolean)
+    .join("+");
 }
 
 export default PRESETS;

@@ -1,6 +1,7 @@
 //! PDF compression engine (ADR-0002, ADR-0003).
 //!
-//! Pipeline: load with decode limits → refuse encrypted and signed files → merge identical streams → drop
+//! Pipeline: load with decode limits → refuse encrypted and signed files → (optional) remove metadata and editing
+//! data → merge identical streams → drop
 //! unreachable objects → (lossy presets) re-encode and downsample images → re-deflate streams → save with object
 //! and cross-reference streams → reload to verify → fall back to the original bytes unless the result is smaller.
 //! Every stage reports progress and checks for cancellation through a [`Control`].
@@ -11,6 +12,7 @@ mod error;
 mod guards;
 mod images;
 mod limits;
+mod metadata;
 mod objects;
 mod options;
 mod placement;
@@ -45,6 +47,13 @@ pub struct PdfReport {
     pub images_downsampled: u32,
     pub duplicates_merged: u32,
     pub unused_objects_removed: u32,
+    /// Info, XMP or both were removed (only with `strip_metadata`).
+    pub metadata_removed: bool,
+    /// `strip_metadata` kept the catalog XMP and Info because the file declares PDF/A, PDF/UA, PDF/X, PDF/E or PDF/VT.
+    pub metadata_kept_for_standard: bool,
+    pub thumbnails_removed: u32,
+    /// Objects whose `/PieceInfo` was removed (only with `strip_editing_data`).
+    pub editing_data_removed: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +99,17 @@ pub(crate) fn compress_with_limits(
 
     let mut report = PdfReport { original_size, pages, ..PdfReport::default() };
     checkpoint(control, Stage::Structure)?;
+    // Before dedupe and prune, so the objects these entries pointed to are dropped as unreachable.
+    if options.strip_metadata {
+        let keep_document_metadata = guards::declares_standard(&doc, MAX_METADATA_BYTES);
+        let stats = metadata::strip_metadata(&mut doc, keep_document_metadata);
+        report.metadata_removed = stats.removed;
+        report.metadata_kept_for_standard = stats.kept_for_standard;
+        report.thumbnails_removed = stats.thumbnails_removed;
+    }
+    if options.strip_editing_data {
+        report.editing_data_removed = metadata::strip_editing_data(&mut doc);
+    }
     report.duplicates_merged = dedupe::merge_identical_streams(&mut doc);
     report.unused_objects_removed = objects::prune_unreachable(&mut doc);
     if let Some(image_options) = &options.images {

@@ -5,8 +5,8 @@
 2. Shell resolves the id to a path (`FileRegistry`), takes the single **work slot** (one compression at a time),
    checks that the opened file is regular, checks its size, and reads at most the input limit plus one byte.
    Files that grow beyond the limit during the read are refused too.
-3. `fileforge_core::pdf::compress_controlled` (in `spawn_blocking`): load → refuse encrypted/signed → merge
-   duplicate streams → drop unreachable objects → image pass (lossy presets, ≤ 4 images in parallel) → re-deflate →
+3. `fileforge_core::pdf::compress_controlled` (in `spawn_blocking`): load → refuse encrypted/signed → (on request)
+   remove metadata, thumbnails and editing data → merge duplicate streams → drop unreachable objects → image pass (lossy presets, ≤ 4 images in parallel) → re-deflate →
    save (object + cross-reference streams, or classic for PDF/A-1) → reload and check page count → keep only if
    smaller. Each stage reports progress to the UI through the call's channel.
 4. Shell writes the result atomically to the temp store and returns the `PdfReport`.

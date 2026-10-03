@@ -14,11 +14,15 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 ## Commands and events today
 - `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`.
 - `remove_file` — forget a registered file and its unsaved result.
-- `compress_pdf(id, options, onProgress)` → `PdfReport`. Options: `{ images: null }` (lossless) or
-  `{ images: { jpegQuality, maxDpi | null } }`. Ranges are defined in `crates/fileforge-core/src/pdf/options.rs`
-  and validated there; the UI mirrors them in `src/features/PdfCompress/pdfPresets.ts`. `onProgress` is a Tauri
-  `Channel` receiving `{ stage, done, total }` (stages: `loading`, `structure`, `images`, `streams`, `saving`,
-  `verifying`; `total: 0` = not counted), throttled to stage changes, stage completion and one update per 100 ms.
+- `compress_pdf(id, options, onProgress)` → `PdfReport`. Options:
+  `{ images: null | { jpegQuality, maxDpi | null }, stripMetadata, stripEditingData }`; `images: null` is lossless,
+  and the two removal flags (default `false` when omitted) work with any preset (ADR-0012). Ranges are defined in
+  `crates/fileforge-core/src/pdf/options.rs` and validated there; the UI mirrors them in
+  `src/features/PdfCompress/pdfPresets.ts`. The report adds `metadataRemoved`, `metadataKeptForStandard`,
+  `thumbnailsRemoved` and `editingDataRemoved` to the size and image counts; a kept original reports no removal.
+  `onProgress` is a Tauri `Channel` receiving `{ stage, done, total }` (stages: `loading`, `structure`, `images`,
+  `streams`, `saving`, `verifying`; `total: 0` = not counted), throttled to stage changes, stage completion and one
+  update per 100 ms.
   Progress may arrive after the command settles; the UI ignores it then (ADR-0011).
 - `cancel_compression` — cancels every compression already started at its next checkpoint; those reject with
   `cancelled`. Later calls are unaffected; a no-op when nothing runs.

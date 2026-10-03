@@ -8,8 +8,10 @@ use lopdf::{Document, Object, ObjectId};
 // Utils
 use support::{PdfBuilder, jpeg};
 
-const BALANCED: PdfOptions = PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }) };
-const MAXIMUM: PdfOptions = PdfOptions { images: Some(ImageOptions { jpeg_quality: 70, max_dpi: Some(150) }) };
+const BALANCED: PdfOptions =
+    PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }), ..PdfOptions::LOSSLESS };
+const MAXIMUM: PdfOptions =
+    PdfOptions { images: Some(ImageOptions { jpeg_quality: 70, max_dpi: Some(150) }), ..PdfOptions::LOSSLESS };
 
 /// Text-heavy content stream, the bulk of most office documents.
 fn text_content(page: usize) -> String {
@@ -220,7 +222,7 @@ fn pdfa1_files_keep_a_classic_cross_reference_table() {
 
 #[test]
 fn invalid_options_are_rejected_before_reading_the_file() {
-    let options = PdfOptions { images: Some(ImageOptions { jpeg_quality: 5, max_dpi: None }) };
+    let options = PdfOptions { images: Some(ImageOptions { jpeg_quality: 5, max_dpi: None }), ..PdfOptions::LOSSLESS };
     assert!(matches!(compress(b"not even a pdf", &options), Err(PdfError::InvalidOptions(_))));
 }
 
