@@ -25,7 +25,7 @@ _Updated: 2026-10-03_
   `github-chepio-tech` SSH alias.
 
 ## In progress
-- Push the verified first version to the organization repository and verify its GitHub CI.
+No active implementation work. The first PDF version is complete and delivered to the organization repository.
 
 ## Known issues
 - Builds are not signed or notarized (ADR-0005): Gatekeeper/SmartScreen warnings on first launch.
@@ -43,12 +43,14 @@ _Updated: 2026-10-03_
 - `pnpm typecheck`, `pnpm test` (36 tests), `pnpm build`: passed.
 - `cargo fmt --all -- --check`, clippy with `-D warnings`, locked workspace tests (52 tests on macOS): passed.
 - `pnpm tauri build`: macOS Apple Silicon `.app` and `.dmg` built successfully.
+- `hdiutil verify` confirmed the final DMG checksum; `codesign --verify --deep --strict` passed for the final app.
+  The app uses an ad-hoc signature and is not notarized.
 - Native app smoke test on a generated PDF: pick → lossless compression (74,600 → 825 bytes) → refused original
   overwrite → individual save → numbered batch save. Original checksum unchanged; output copies identical;
   no staging files left behind. UI mechanical check: no findings.
 - Case-variant and hard-link original protection: regression tests passed on the local case-insensitive macOS volume.
-- GitHub CI passed for the verified implementation (`f16935b`) before the repository switch:
-  https://github.com/denys-chepiha/fileforge/actions/runs/37120318442.
+- GitHub CI passed in the organization repository for the delivered implementation and repository-link updates
+  (`b56b244`): https://github.com/chepio-tech/file-forge/actions/runs/37121273364.
 
 ## Next step
-Finish the ROADMAP release-readiness delivery step; then Platform track (signing) or Phase 1.1.
+Choose the next ROADMAP track: Platform (signing before public distribution) or Phase 1.1 (PDF engine quality).

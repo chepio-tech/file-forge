@@ -33,7 +33,7 @@ Verification: `cargo test -p fileforge-core && pnpm vitest run src/features/PdfC
 - [x] UI: preset picker with exact parameters, compress all, per-file status and results, save actions
 - [x] Docs: interfaces, runtime (limits, failure modes), domain invariants, CURRENT_STATE
 
-## Phase 1 release readiness
+## Phase 1 release readiness ✅
 Scope: safe saving, bounded file reads, complete failure feedback, installation documentation, native build and GitHub delivery.
 Non-scope: new processing engines, signing, auto-update, public release publication.
 Definition of Done: regression tests pass, host installer builds, README points to the repository's releases,
@@ -43,8 +43,9 @@ Verification: `pnpm typecheck && pnpm test && pnpm build && cargo fmt --all -- -
 
 - [x] Protect originals and batch destinations, bound input reads, test saving and UI failure handling
 - [x] Finish README download navigation and verify CI/build configuration
+- [ ] Move README downloads to the top and give all platforms matching buttons with licensed artwork
 - [x] Build and smoke-test the host installer and update docs
-- [ ] Push the tested project to GitHub and verify CI
+- [x] Push the tested project to GitHub and verify CI
 
 ## Phase 1.1 — PDF engine quality (optimization track)
 - [ ] Cancel a running compression; progress inside large documents

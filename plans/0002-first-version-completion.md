@@ -26,7 +26,7 @@ Rust result saving and input reads, PDF UI failure handling, README, CI, state a
 - [x] Handle save/reveal failures and pending saves in the UI; add regression tests.
 - [x] Finish README download navigation and verify the installer/CI setup.
 - [x] Run affected checks, build a macOS installer, and smoke-test the app.
-- [ ] Refresh state/roadmap/contract docs, commit the tested changes, merge into main and push to the organization repository.
+- [x] Refresh state/roadmap/contract docs, commit the tested changes, merge into main and push to the organization repository.
 
 ## Validation
 `pnpm typecheck`, `pnpm test`, `pnpm build`, `cargo fmt --all -- --check`,
@@ -35,7 +35,7 @@ Rust result saving and input reads, PDF UI failure handling, README, CI, state a
 
 ## Risks
 - GitHub CLI's HTTPS authentication is invalid. The dedicated organization SSH key is authenticated as
-  `denys-chepiha`; the remote uses `github-chepio-tech` and the new repository is empty.
+  `denys-chepiha`; the remote uses `github-chepio-tech` and `main` has been pushed successfully.
 - Installers are unsigned/not notarized; publishing remains an explicit separate action.
 - Windows/Linux installer execution requires their native runners; report what was actually verified.
 
@@ -44,9 +44,10 @@ Revert the completion commit; no data migrations or new dependencies are involve
 
 ## Progress
 Implementation, docs, 36 frontend tests, 52 macOS Rust tests, typecheck, production build, format and clippy are green.
-The macOS Apple Silicon app/DMG builds; native intake/compression/safe save/batch save checks passed. The verified
-implementation (`f16935b`) passed GitHub CI in the previous repository. Remaining: commit the repository-link
-updates, push to the organization repository and verify its CI.
+The macOS Apple Silicon app/DMG builds; native intake/compression/safe save/batch save checks passed. The final DMG
+checksum and app signature verification passed. Repository links have been updated; `b56b244` is on the organization
+repository's `main` and passed GitHub CI: https://github.com/chepio-tech/file-forge/actions/runs/37121273364.
+The first PDF version and its delivery are complete; further engines and platform work remain on the roadmap.
 
 ## Discoveries
 - The repository was initially delivered to `denys-chepiha/fileforge`. The user then selected
