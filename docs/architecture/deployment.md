@@ -12,15 +12,20 @@ macOS `.app` + `.dmg`; Windows `.msi` + NSIS `.exe`; Linux `.deb`, `.rpm`, `.App
 Bundle settings (identifier `tech.chepio.fileforge`, icons, category, macOS minimum 11.0) are in
 `src-tauri/tauri.conf.json`.
 
-## Releases (ADR-0005)
-`.github/workflows/release.yml` builds all targets on native runners and uploads them to a **draft** GitHub release
-named after the workspace version in `Cargo.toml`. Trigger: push a `v*` tag or run the workflow manually.
-Publishing the draft is a manual, approval-requiring step.
+## Releases (ADR-0005, ADR-0008)
+`.github/workflows/release.yml` builds all targets on native runners, copies the installers to stable,
+version-free names and, once every build succeeds, commits them to `installers/` on `main`
+(`[fileforge]: Update installers to vX.Y.Z`). The README download links point to
+`https://github.com/chepio-tech/file-forge/raw/main/installers/<name>`; the matrix `installers` entries in the
+workflow are the only list of names, and `docs/readmeDownloads.test.ts` keeps the README in sync with it.
+Trigger: push a `v*` tag, or run the workflow manually on `main` (runs from other branches build but do not commit).
+The commit job needs direct pushes to `main` by `GITHUB_TOKEN`; it fails on files over GitHub's 100 MiB limit.
 
 Release checklist:
 1. Bump `version` under `[workspace.package]` in `Cargo.toml` — the only version source (Tauri falls back to it).
 2. CI green on `main`.
-3. Tag `vX.Y.Z`, push, wait for the draft, smoke-test one installer per OS, publish.
+3. Tag `vX.Y.Z` and push it (publishing the installers needs approval), wait for the installer commit, then
+   pull and smoke-test one installer per OS from the README links.
 
 ## Signing
 - macOS: ad-hoc (`signingIdentity: "-"`). Not notarized: first launch needs right-click → Open.

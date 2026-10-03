@@ -22,8 +22,3 @@ coverage
 .DS_Store
 *.suo
 *.sw?
-
-# Agent contract is part of the project knowledge base (overrides the global ignore)
-!AGENTS.md
-!**/AGENTS.md
-!CLAUDE.md

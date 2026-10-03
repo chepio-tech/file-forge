@@ -18,7 +18,7 @@ Cargo workspace at the repo root.
 ## Rationale
 - Installers around 10 MB and low memory use versus 100+ MB and 150–300 MB RAM for Electron.
 - Compression runs natively; Rust's memory safety matters for parsers of untrusted files.
-- React matches the owner's other projects and the `chepio-footer` component.
+- React matches the owner's other projects and the `ChepioTechFooter` component.
 - A Tauri-free core crate compiles and tests in seconds and keeps engines reusable (CLI, other shells).
 
 ## Alternatives considered
@@ -28,8 +28,8 @@ Cargo workspace at the repo root.
 
 ## Consequences
 - Two languages and toolchains (Rust, Node/pnpm); first Rust build takes minutes.
-- macOS uses WKWebView, Windows WebView2 (Chromium), Linux WebKitGTK: CSS must work on all three (no relative
-  color syntax, see `src/AGENTS.md`).
+- macOS uses WKWebView, Windows WebView2 (Chromium), Linux WebKitGTK: CSS must work on all three; relative
+  color syntax is not used because WebKitGTK support is inconsistent.
 - No WebDriver for WKWebView: end-to-end UI tests on macOS are not available; UI is tested with Vitest + Testing
   Library and the IPC layer is mocked.
 

@@ -1,5 +1,34 @@
 # FileForge
 
+## Download
+
+<p>
+  <a href="https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-macOS-AppleSilicon.dmg"><img src="docs/assets/download-macos/download-macos.png" alt="Download for macOS" width="260" height="80" /></a>
+  <a href="https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Windows-x64-setup.exe"><img src="docs/assets/download-windows/download-windows.png" alt="Download for Windows" width="260" height="80" /></a>
+  <a href="https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.AppImage"><img src="docs/assets/download-linux/download-linux.png" alt="Download for Linux" width="260" height="80" /></a>
+</p>
+
+The buttons start the download right away: macOS for Apple Silicon, the Windows installer and the Linux AppImage.
+Every installer lives in [installers](installers/); download another package here:
+
+| OS | Download |
+|---|---|
+| macOS | [Apple Silicon (.dmg)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-macOS-AppleSilicon.dmg) · [Intel (.dmg)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-macOS-Intel.dmg) |
+| Windows (x64) | [Installer (.exe)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Windows-x64-setup.exe) · [MSI package (.msi)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Windows-x64.msi) |
+| Linux (x64) | [AppImage](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.AppImage) · [Debian/Ubuntu (.deb)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.deb) · [Fedora/openSUSE (.rpm)](https://github.com/chepio-tech/file-forge/raw/main/installers/FileForge-Linux-x64.rpm) |
+
+Until the release workflow commits the first build to `installers/`, the links return "Not Found"; use the
+source-build instructions below.
+
+The app requires macOS 11+, Windows 10+ (WebView2), or Linux with the
+[Tauri runtime prerequisites](https://v2.tauri.app/start/prerequisites/).
+
+Builds are not signed yet:
+- **macOS**: on first launch right-click the app → **Open**, or allow it in System Settings → Privacy & Security.
+- **Windows**: SmartScreen → **More info** → **Run anyway**.
+
+## About
+
 <img src="docs/assets/app-icon.png" alt="FileForge app icon" width="112" height="112" />
 
 Desktop PDF compression, entirely on your computer. Built for macOS, Windows and Linux.
@@ -12,30 +41,6 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
 - Compare original/result sizes per file and for the batch, then save one result or all results to a folder.
 - Keep originals untouched. Results are never larger; encrypted and digitally signed PDFs are refused.
 - Work locally, with system light/dark themes and no file uploads.
-
-## Install
-
-Open [FileForge releases](https://github.com/chepio-tech/file-forge/releases) for installer packages:
-
-[![Download for macOS](docs/assets/download-macos.svg)](https://github.com/chepio-tech/file-forge/releases)
-[![Download for Windows](docs/assets/download-windows.svg)](https://github.com/chepio-tech/file-forge/releases)
-[![Download for Linux](docs/assets/download-linux.svg)](https://github.com/chepio-tech/file-forge/releases)
-
-The buttons open the releases page so you can choose the correct architecture and package. Until a release is
-published, use the source-build instructions below.
-
-| OS | File |
-|---|---|
-| macOS (Apple Silicon / Intel) | `FileForge_<version>_aarch64.dmg` / `FileForge_<version>_x64.dmg` |
-| Windows | `FileForge_<version>_x64-setup.exe` or `.msi` |
-| Linux | `.AppImage`, `.deb` or `.rpm` |
-
-The app requires macOS 11+, Windows 10+ (WebView2), or Linux with the
-[Tauri runtime prerequisites](https://v2.tauri.app/start/prerequisites/).
-
-Builds are not signed yet:
-- **macOS**: on first launch right-click the app → **Open**, or allow it in System Settings → Privacy & Security.
-- **Windows**: SmartScreen → **More info** → **Run anyway**.
 
 ## Develop
 
@@ -64,7 +69,7 @@ cargo test --workspace --locked
 ```
 
 GitHub Actions checks pull requests and `main`. The release workflow builds installers for macOS Apple Silicon,
-macOS Intel, Windows x64 and Linux x64 and attaches them to a draft release. Publishing requires a separate review;
+macOS Intel, Windows x64 and Linux x64 and commits them to `installers/` on `main`;
 see [deployment](docs/architecture/deployment.md).
 
 ## Current limits
@@ -75,8 +80,7 @@ see [deployment](docs/architecture/deployment.md).
 - Batch saving requires a destination filesystem that supports hard links (for example APFS, NTFS or ext4).
 - The application's license has not been chosen. Dependency licenses remain their respective authors' licenses.
 
-Project docs: [current state](docs/CURRENT_STATE.md), [roadmap](docs/ROADMAP.md), [architecture](docs/architecture/components.md)
-and [decisions](docs/decisions/README.md). Contributor and agent rules: [AGENTS.md](AGENTS.md).
+Project docs: [architecture](docs/architecture/components.md) and [decisions](docs/decisions/README.md).
 
 ---
 

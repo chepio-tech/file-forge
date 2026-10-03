@@ -15,7 +15,7 @@ flowchart LR
 
 Allowed dependency directions: UI → shell (IPC only) → core. Core depends on nothing app-specific.
 
-Inside the shell, modules follow the import groups of the global rules: `error` (types) ← `file_registry`,
+Inside the shell, module dependencies flow from `error` (types) ← `file_registry`,
 `results` (state) ← `commands`, `drag_drop` (handlers).
 
 UI structure: `components/` shared presentational pieces; `features/` one folder per tool plus
