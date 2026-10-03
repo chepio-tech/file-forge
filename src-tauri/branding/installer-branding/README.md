@@ -2,7 +2,7 @@
 
 The company logo source is `public/images/chepio-tech/main_logo.svg`. The SVG layouts in this folder embed that
 vector and omit its small tagline for legibility at native installer sizes. The welcome/completion panels embed
-the generated application icon from `public/app-icon.png`. FileForge remains the application name;
+the generated application icon from `public/app-icon.png`. File Forge is the application name;
 Chepio.tech is its publisher. No artwork depends on a network URL or an installed Windows font at runtime.
 
 | Asset | Native use | Size |
