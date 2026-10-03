@@ -67,6 +67,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm tauri build ${{ matrix.args }}
+        env:
+          # Tauri otherwise skips Finder layout on CI, which drops the DMG background and icon positions.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
 
       - name: Collect installers under stable names
         shell: bash

@@ -18,7 +18,7 @@ download another package here:
 | Windows (x64) | [Installer (.exe)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Windows-x64-setup.exe) · [MSI package (.msi)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Windows-x64.msi) |
 | Linux (x64) | [AppImage](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Linux-x64.AppImage) · [Debian/Ubuntu (.deb)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Linux-x64.deb) · [Fedora/openSUSE (.rpm)](https://github.com/chepio-tech/file-forge/releases/latest/download/FileForge-Linux-x64.rpm) |
 
-Until the first release is published, the links return "Not Found"; use the source-build instructions below.
+For this private repository, sign in to GitHub with an account that has repository access before downloading.
 
 The app requires macOS 11+, Windows 10+ (WebView2), or Linux with the
 [Tauri runtime prerequisites](https://v2.tauri.app/start/prerequisites/).
