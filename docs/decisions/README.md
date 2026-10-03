@@ -11,3 +11,4 @@
 | [ADR-0007](ADR-0007-original-file-identity.md) | Check filesystem identity when protecting originals on Unix | Accepted |
 | [ADR-0008](ADR-0008-installers-folder.md) | Commit installers to `installers/` under stable names | Superseded by ADR-0009 |
 | [ADR-0009](ADR-0009-github-release-downloads.md) | Publish installers as GitHub release assets under stable names | Accepted |
+| [ADR-0011](ADR-0011-cooperative-cancellation.md) | Cooperative cancellation and channel-based progress for compressions | Accepted |

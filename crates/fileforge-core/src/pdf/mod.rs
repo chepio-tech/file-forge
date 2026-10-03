@@ -3,7 +3,9 @@
 //! Pipeline: load with decode limits → refuse encrypted and signed files → merge identical streams → drop
 //! unreachable objects → (lossy presets) re-encode and downsample images → re-deflate streams → save with object
 //! and cross-reference streams → reload to verify → fall back to the original bytes unless the result is smaller.
+//! Every stage reports progress and checks for cancellation through a [`Control`].
 
+mod control;
 mod dedupe;
 mod error;
 mod guards;
@@ -19,6 +21,7 @@ use lopdf::xref::XrefType;
 use lopdf::{Document, LoadOptions, SaveOptions};
 use serde::Serialize;
 
+pub use control::{Control, Progress, Stage};
 pub use error::PdfError;
 pub use limits::MAX_INPUT_BYTES;
 pub use options::{ImageOptions, JPEG_QUALITY_RANGE, MAX_DPI_RANGE, PdfOptions};
@@ -53,16 +56,28 @@ pub struct PdfOutput {
 /// Compresses a PDF held in memory. Never returns something larger than `input`, never panics on malformed input
 /// by design (callers still isolate panics from dependencies, see ADR-0004).
 pub fn compress(input: &[u8], options: &PdfOptions) -> Result<PdfOutput, PdfError> {
-    compress_with_limits(input, options, &Limits::DEFAULT)
+    compress_controlled(input, options, &())
 }
 
-pub(crate) fn compress_with_limits(input: &[u8], options: &PdfOptions, limits: &Limits) -> Result<PdfOutput, PdfError> {
+/// Like [`compress`], but reports progress to `control` and ends with [`PdfError::Cancelled`] at the next
+/// checkpoint once `control` asks to stop. Parsing and saving cannot be interrupted from inside.
+pub fn compress_controlled(input: &[u8], options: &PdfOptions, control: &dyn Control) -> Result<PdfOutput, PdfError> {
+    compress_with_limits(input, options, &Limits::DEFAULT, control)
+}
+
+pub(crate) fn compress_with_limits(
+    input: &[u8],
+    options: &PdfOptions,
+    limits: &Limits,
+    control: &dyn Control,
+) -> Result<PdfOutput, PdfError> {
     options.validate()?;
     let original_size = input.len() as u64;
     if original_size > limits.max_input_bytes {
         return Err(PdfError::TooLarge { limit: limits.max_input_bytes });
     }
 
+    checkpoint(control, Stage::Loading)?;
     let mut doc = load(input, limits)?;
     let pages = u32::try_from(doc.get_pages().len()).unwrap_or(u32::MAX);
     if pages == 0 {
@@ -74,18 +89,25 @@ pub(crate) fn compress_with_limits(input: &[u8], options: &PdfOptions, limits: &
     let classic_layout = guards::is_pdfa1(&doc, MAX_METADATA_BYTES);
 
     let mut report = PdfReport { original_size, pages, ..PdfReport::default() };
+    checkpoint(control, Stage::Structure)?;
     report.duplicates_merged = dedupe::merge_identical_streams(&mut doc);
     report.unused_objects_removed = objects::prune_unreachable(&mut doc);
     if let Some(image_options) = &options.images {
+        // Finding placements walks every page; it is reported as the uncounted start of the image stage.
+        checkpoint(control, Stage::Images)?;
         let sizes = placement::image_display_sizes(&doc, limits.max_stream_bytes);
-        let stats = images::optimize_images(&mut doc, image_options, &sizes, limits);
+        let stats = images::optimize_images(&mut doc, image_options, &sizes, limits, control);
         report.images_recompressed = stats.recompressed;
         report.images_downsampled = stats.downsampled;
     }
-    streams::recompress_streams(&mut doc, limits.max_stream_bytes);
+    cancelled(control)?;
+    streams::recompress_streams(&mut doc, limits.max_stream_bytes, control);
+    cancelled(control)?;
     doc.renumber_objects();
 
+    control.report(Progress { stage: Stage::Saving, done: 0, total: 0 });
     let bytes = save(&mut doc, classic_layout)?;
+    checkpoint(control, Stage::Verifying)?;
     verify(&bytes, pages, limits)?;
 
     if bytes.len() >= input.len() {
@@ -102,6 +124,17 @@ pub(crate) fn compress_with_limits(input: &[u8], options: &PdfOptions, limits: &
     }
     report.output_size = bytes.len() as u64;
     Ok(PdfOutput { bytes, report })
+}
+
+fn cancelled(control: &dyn Control) -> Result<(), PdfError> {
+    if control.is_cancelled() { Err(PdfError::Cancelled) } else { Ok(()) }
+}
+
+/// Stops if cancelled, otherwise reports the start of an uncounted stage.
+fn checkpoint(control: &dyn Control, stage: Stage) -> Result<(), PdfError> {
+    cancelled(control)?;
+    control.report(Progress { stage, done: 0, total: 0 });
+    Ok(())
 }
 
 fn load(input: &[u8], limits: &Limits) -> Result<Document, PdfError> {
@@ -154,7 +187,7 @@ mod tests {
     fn files_above_the_size_limit_are_refused_before_parsing() {
         let limits = Limits { max_input_bytes: 8, ..Limits::DEFAULT };
         assert_eq!(
-            compress_with_limits(b"%PDF-1.7 and more", &PdfOptions::LOSSLESS, &limits),
+            compress_with_limits(b"%PDF-1.7 and more", &PdfOptions::LOSSLESS, &limits, &()),
             Err(PdfError::TooLarge { limit: 8 })
         );
     }

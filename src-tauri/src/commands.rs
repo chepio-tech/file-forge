@@ -7,14 +7,16 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use fileforge_core::FileKind;
-use fileforge_core::pdf::{self, MAX_INPUT_BYTES, PdfOptions, PdfReport};
+use fileforge_core::pdf::{self, MAX_INPUT_BYTES, PdfOptions, PdfReport, Progress};
 use serde::Serialize;
+use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 // Types
 use crate::error::AppError;
 use crate::file_registry::{FileId, FileRegistry, RegisterOutcome};
+use crate::job_control::{Cancellation, JobControl};
 use crate::results::{ResultStore, copy_result, copy_result_to_folder, output_name};
 
 /// Opens the native "open files" dialog filtered to `kinds` and registers the picked files.
@@ -54,21 +56,42 @@ pub async fn remove_file(app: AppHandle, id: FileId) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Compresses one registered PDF into a temp result. The original file is only read.
+/// Compresses one registered PDF into a temp result, sending throttled progress to `on_progress`. The original file
+/// is only read. Ends with `cancelled` when `cancel_compression` is called before the result is ready.
 #[tauri::command]
-pub async fn compress_pdf(app: AppHandle, id: FileId, options: PdfOptions) -> Result<PdfReport, AppError> {
+pub async fn compress_pdf(
+    app: AppHandle,
+    id: FileId,
+    options: PdfOptions,
+    on_progress: Channel<Progress>,
+) -> Result<PdfReport, AppError> {
     options.validate()?;
+    // Taken before waiting for the work slot, so a cancel also reaches a job that has not started yet.
+    let ticket = app.state::<Cancellation>().ticket();
     tauri::async_runtime::spawn_blocking(move || {
         let results = app.state::<ResultStore>();
         // One document in memory at a time, whatever the UI sends.
         let _slot = results.work_slot();
+        let cancellation = app.state::<Cancellation>();
+        if cancellation.is_cancelled(ticket) {
+            return Err(AppError::Cancelled);
+        }
         let file = app.state::<FileRegistry>().get(id)?;
         let input = read_pdf_input(&file.path, MAX_INPUT_BYTES)?;
-        let output = pdf::compress(&input, &options)?;
+        // A closed webview cannot receive progress; the compression itself still completes.
+        let control = JobControl::new(&cancellation, ticket, |progress| drop(on_progress.send(progress)));
+        let output = pdf::compress_controlled(&input, &options, &control)?;
         results.put(id, &output.bytes)?;
         Ok(output.report)
     })
     .await?
+}
+
+/// Cancels every compression already started, at its next checkpoint; later compressions are unaffected.
+/// A no-op when nothing is running.
+#[tauri::command]
+pub fn cancel_compression(cancellation: State<'_, Cancellation>) {
+    cancellation.cancel_started();
 }
 
 /// Asks where to save one result (next to the original by default) and writes it there.

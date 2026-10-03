@@ -1,5 +1,5 @@
 // Core
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -50,6 +50,16 @@ export interface PdfReport {
   unusedObjectsRemoved: number;
 }
 
+/** Pipeline stages in the order the engine runs them; `images` only runs for lossy presets. */
+export type PdfStage = "loading" | "structure" | "images" | "streams" | "saving" | "verifying";
+
+/** `total: 0` means the stage is not counted; otherwise `done` grows from 0 to `total`. */
+export interface PdfProgress {
+  stage: PdfStage;
+  done: number;
+  total: number;
+}
+
 export interface SavedFile {
   id: FileId;
   name: string;
@@ -65,6 +75,7 @@ export type AppErrorCode =
   | "pdfSigned"
   | "pdfMalformed"
   | "invalidOptions"
+  | "cancelled"
   | "io"
   | "internal";
 
@@ -87,8 +98,17 @@ const fileforgeApi = {
   /** Forgets the file and its unsaved result. */
   removeFile: (id: FileId) => invoke<void>("remove_file", { id }),
 
-  /** Compresses into a temp result; the original is only read. */
-  compressPdf: (id: FileId, options: PdfOptions) => invoke<PdfReport>("compress_pdf", { id, options }),
+  /**
+   * Compresses into a temp result; the original is only read. `onProgress` receives throttled stage updates.
+   * Rejects with `cancelled` after `cancelCompression`.
+   */
+  compressPdf: (id: FileId, options: PdfOptions, onProgress: (progress: PdfProgress) => void = () => {}) => {
+    const channel = new Channel<PdfProgress>(onProgress);
+    return invoke<PdfReport>("compress_pdf", { id, options, onProgress: channel });
+  },
+
+  /** Stops every compression already started at its next checkpoint; a no-op when nothing runs. */
+  cancelCompression: () => invoke<void>("cancel_compression"),
 
   /** Native save dialog next to the original; resolves with the saved file name, or `null` when cancelled. */
   saveResult: (id: FileId) => invoke<string | null>("save_result", { id }),
