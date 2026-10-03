@@ -16,8 +16,12 @@ Bundle settings (identifier `tech.chepio.fileforge`, icons, category, macOS mini
 Chepio.tech is the package publisher. `src-tauri/branding/installer-branding/` holds vector layouts and native
 installer artwork. The Windows NSIS installer uses a right-aligned header signature and a welcome/
 completion sidebar; the MSI uses a banner and dialog image with the native text area kept white. A small NSIS
-include sets the header alignment; Tauri's installer templates and installation behavior remain the defaults.
+include sets the header alignment and proportional image scaling. Windows artwork is rendered from vectors at
+2× resolution for high DPI displays; the native layout proportions and MSI text area are preserved.
+Tauri's installer templates and installation behavior remain the defaults.
 The macOS DMG uses a company signature in its bottom strip, below the standard app and Applications drag targets.
+Its background TIFF contains standard and Retina representations; the signature stays clear of the bottom edge
+after Finder accounts for its title bar.
 The release build sets `TAURI_BUNDLER_DMG_IGNORE_CI=true` so Tauri also configures Finder's background and icon
 positions on the macOS runners; otherwise Tauri skips that step on CI.
 Linux AppImage has no installation wizard; Debian/RPM installation windows belong to the system package manager.

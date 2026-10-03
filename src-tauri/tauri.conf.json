@@ -40,7 +40,7 @@
       "signingIdentity": "-",
       "minimumSystemVersion": "11.0",
       "dmg": {
-        "background": "branding/installer-branding/dmg-background.png",
+        "background": "branding/installer-branding/dmg-background.tiff",
         "windowSize": { "width": 660, "height": 400 },
         "appPosition": { "x": 180, "y": 160 },
         "applicationFolderPosition": { "x": 480, "y": 160 }
