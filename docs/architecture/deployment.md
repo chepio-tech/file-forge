@@ -12,6 +12,18 @@ macOS `.app` + `.dmg`; Windows `.msi` + NSIS `.exe`; Linux `.deb`, `.rpm`, `.App
 Bundle settings (identifier `tech.chepio.fileforge`, icons, category, macOS minimum 11.0) are in
 `src-tauri/tauri.conf.json`.
 
+### Installer appearance
+Chepio.tech is the package publisher. `src-tauri/branding/installer-branding/` holds vector layouts and native
+installer artwork. The Windows NSIS installer uses a right-aligned header signature and a welcome/
+completion sidebar; the MSI uses a banner and dialog image with the native text area kept white. A small NSIS
+include sets the header alignment; Tauri's installer templates and installation behavior remain the defaults.
+The macOS DMG uses a company signature in its bottom strip, below the standard app and Applications drag targets.
+The release build sets `TAURI_BUNDLER_DMG_IGNORE_CI=true` so Tauri also configures Finder's background and icon
+positions on the macOS runners; otherwise Tauri skips that step on CI.
+Linux AppImage has no installation wizard; Debian/RPM installation windows belong to the system package manager.
+Asset formats, dimensions and the MSI text area are checked by `docs/installerBranding.test.ts`.
+See the artwork folder's README for source files and regeneration commands.
+
 ## Releases (ADR-0005, ADR-0009, ADR-0010)
 `.github/workflows/release.yml` builds all targets on native runners and copies the installers to stable,
 version-free names. On a pushed `v*` tag that matches the `Cargo.toml` version, and only when every build succeeds,

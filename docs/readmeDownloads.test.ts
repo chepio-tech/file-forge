@@ -14,7 +14,7 @@ describe("README downloads", () => {
   it("places downloading before the app description and features", () => {
     expect(readme.match(/^## .+$/m)?.[0]).toBe("## Download");
     expect(readme.indexOf("## Download")).toBeLessThan(readme.indexOf("Desktop PDF compression"));
-    expect(downloadSection).toContain("Until the first release is published");
+    expect(downloadSection).toContain("sign in to GitHub with an account that has repository access");
   });
 
   it("downloads each platform's installer directly with accessible, equally sized local images", () => {

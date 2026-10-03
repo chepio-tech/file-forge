@@ -34,9 +34,28 @@
     "shortDescription": "Compress and convert files locally",
     "longDescription": "FileForge compresses PDFs, images, video and audio and converts between formats, entirely on your computer.",
     "copyright": "© 2026 Denys Chepiha",
+    "publisher": "Chepio.tech",
+    "homepage": "https://chepio.tech",
     "macOS": {
       "signingIdentity": "-",
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "dmg": {
+        "background": "branding/installer-branding/dmg-background.png",
+        "windowSize": { "width": 660, "height": 400 },
+        "appPosition": { "x": 180, "y": 160 },
+        "applicationFolderPosition": { "x": 480, "y": 160 }
+      }
+    },
+    "windows": {
+      "nsis": {
+        "headerImage": "branding/installer-branding/nsis-header.bmp",
+        "sidebarImage": "branding/installer-branding/nsis-sidebar.bmp",
+        "installerHooks": "branding/installer-branding/installerBranding.nsh"
+      },
+      "wix": {
+        "bannerPath": "branding/installer-branding/wix-banner.bmp",
+        "dialogImagePath": "branding/installer-branding/wix-dialog.bmp"
+      }
     },
     "icon": [
       "icons/32x32.png",
