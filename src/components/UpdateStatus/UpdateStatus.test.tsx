@@ -50,7 +50,7 @@ describe("UpdateStatus", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Check for updates" }));
 
-    expect(await screen.findByText("FileForge 0.1.0 is up to date.")).toBeInTheDocument();
+    expect(await screen.findByText("File Forge 0.1.0 is up to date.")).toBeInTheDocument();
     expect(api().checkForUpdate).toHaveBeenCalledTimes(2);
   });
 
@@ -65,7 +65,7 @@ describe("UpdateStatus", () => {
     ).toBeInTheDocument();
     api().checkForUpdate.mockResolvedValueOnce(newer);
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("FileForge 0.2.0 is available.")).toBeInTheDocument();
+    expect(await screen.findByText("File Forge 0.2.0 is available.")).toBeInTheDocument();
   });
 
   it("installs a found update only when the user asks", async () => {
@@ -73,7 +73,7 @@ describe("UpdateStatus", () => {
     render(<UpdateStatus />);
 
     const restart = await screen.findByRole("button", { name: "Restart to update" });
-    expect(screen.getByText("FileForge 0.2.0 is available.")).toBeInTheDocument();
+    expect(screen.getByText("File Forge 0.2.0 is available.")).toBeInTheDocument();
     expect(api().installUpdate).not.toHaveBeenCalled();
 
     await userEvent.click(restart);
@@ -91,7 +91,7 @@ describe("UpdateStatus", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Restart to update" }));
 
     expect(
-      await screen.findByText("Compressed files you have not saved will be lost when FileForge restarts."),
+      await screen.findByText("Compressed files you have not saved will be lost when File Forge restarts."),
     ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("button", { name: "Restart to update" })).toBeInTheDocument();

@@ -10,7 +10,8 @@ alias. Preserve personal `github.com` routing and keep commit author/signing set
 `pnpm tauri build` produces installers for the host OS under `target/release/bundle/`:
 macOS `.app` + `.dmg`; Windows `.msi` + NSIS `.exe`; Linux `.deb`, `.rpm`, `.AppImage`.
 Bundle settings (identifier `tech.chepio.fileforge`, icons, category, macOS minimum 11.0) are in
-`src-tauri/tauri.conf.json`.
+`src-tauri/tauri.conf.json`. `productName` "File Forge" names the bundles and the Windows install folder; it stays
+fixed (ADR-0014), because a change would make Windows updates install a second copy.
 
 ### Installer appearance
 Chepio.tech is the package publisher. `src-tauri/branding/installer-branding/` holds vector layouts and native

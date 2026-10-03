@@ -1,7 +1,7 @@
 /** Every user-visible string of the UI, in one place. The app is English-only. */
 const messages = {
   app: {
-    name: "FileForge",
+    name: "File Forge",
   },
   nav: {
     label: "Tools",
@@ -102,11 +102,11 @@ const messages = {
   updates: {
     check: "Check for updates",
     checking: "Checking for updates…",
-    upToDate: (version: string) => `FileForge ${version} is up to date.`,
-    available: (version: string) => `FileForge ${version} is available.`,
+    upToDate: (version: string) => `File Forge ${version} is up to date.`,
+    available: (version: string) => `File Forge ${version} is available.`,
     install: "Restart to update",
     installing: "Downloading the update…",
-    unsaved: "Compressed files you have not saved will be lost when FileForge restarts.",
+    unsaved: "Compressed files you have not saved will be lost when File Forge restarts.",
     discard: "Update anyway",
     keep: "Cancel",
     checkFailed: "Could not check for updates. Check your internet connection.",
@@ -118,7 +118,7 @@ const messages = {
     originalTarget: "Choose a different file name. Original files cannot be overwritten.",
     notAFile: "This is a folder or another non-regular file.",
     pdfTooLarge: "This PDF is larger than the 1 GB limit.",
-    pdfEncrypted: "Password-protected PDF. FileForge never removes protection, so it was skipped.",
+    pdfEncrypted: "Password-protected PDF. File Forge never removes protection, so it was skipped.",
     pdfSigned: "Digitally signed PDF. Compressing would invalidate the signature, so it was skipped.",
     pdfMalformed: "This file is damaged or not a valid PDF.",
     invalidOptions: "These settings are out of range.",
@@ -127,7 +127,7 @@ const messages = {
     unsavedResults: "Save your compressed files first, or choose to update anyway.",
     update: "The update could not be downloaded or installed. Nothing was changed.",
     io: "The file could not be read or written.",
-    internal: "Something went wrong inside FileForge. Please try again.",
+    internal: "Something went wrong inside File Forge. Please try again.",
     unknown: "Unexpected error.",
   },
   footer: {

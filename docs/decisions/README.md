@@ -15,3 +15,4 @@
 | [ADR-0011](ADR-0011-cooperative-cancellation.md) | Cooperative cancellation and channel-based progress for compressions | Accepted |
 | [ADR-0012](ADR-0012-metadata-removal.md) | Optional removal of metadata, thumbnails and editing data | Accepted |
 | [ADR-0013](ADR-0013-in-app-updates.md) | In-app updates from signed GitHub release artifacts | Accepted |
+| [ADR-0014](ADR-0014-product-name.md) | The product name is "File Forge" and stays fixed once updates ship | Accepted |
