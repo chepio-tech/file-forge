@@ -18,8 +18,20 @@ describe("pdfPresets", () => {
   });
 
   it("gives equal settings equal keys", () => {
-    expect(optionsKey(PRESETS.balanced)).toBe(optionsKey({ images: { jpegQuality: 85, maxDpi: 200 } }));
+    const keep = { stripMetadata: false, stripEditingData: false };
+    expect(optionsKey(PRESETS.balanced)).toBe(optionsKey({ images: { jpegQuality: 85, maxDpi: 200 }, ...keep }));
     expect(optionsKey(PRESETS.balanced)).not.toBe(optionsKey(PRESETS.maximum));
-    expect(optionsKey({ images: { jpegQuality: 85, maxDpi: null } })).toBe("85/keep");
+    expect(optionsKey({ images: { jpegQuality: 85, maxDpi: null }, ...keep })).toBe("85/keep");
+  });
+
+  it("keeps removal options out of every preset and in the key", () => {
+    for (const preset of Object.values(PRESETS)) {
+      expect([preset.stripMetadata, preset.stripEditingData]).toEqual([false, false]);
+    }
+    expect(optionsKey({ ...PRESETS.lossless, stripMetadata: true })).toBe("lossless+metadata");
+    expect(optionsKey({ ...PRESETS.maximum, stripEditingData: true })).toBe("70/150+editing");
+    expect(optionsKey({ ...PRESETS.lossless, stripMetadata: true, stripEditingData: true })).toBe(
+      "lossless+metadata+editing",
+    );
   });
 });

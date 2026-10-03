@@ -47,14 +47,18 @@ function PdfJobStatus({ id, job, busy, saving, onSave, onReveal }: PdfJobStatusP
     case "done": {
       const { report } = job;
       if (report.keptOriginal) {
-        return <span className="pdf-job pdf-job--muted">{messages.pdf.alreadyOptimal}</span>;
+        // Never larger wins over removal (ADR-0012): say plainly that the metadata is still there.
+        const text = job.removalRequested ? messages.pdf.alreadyOptimalNothingRemoved : messages.pdf.alreadyOptimal;
+        return <span className="pdf-job pdf-job--muted">{text}</span>;
       }
-      const details = messages.pdf.details(
-        report.pages,
-        report.imagesRecompressed,
-        report.imagesDownsampled,
-        report.duplicatesMerged,
-      );
+      const removed = messages.pdf.removed;
+      const details = [
+        messages.pdf.details(report.pages, report.imagesRecompressed, report.imagesDownsampled, report.duplicatesMerged),
+        ...(report.metadataRemoved ? [removed.metadata] : []),
+        ...(report.metadataKeptForStandard ? [removed.keptForStandard] : []),
+        ...(report.thumbnailsRemoved > 0 ? [removed.thumbnails(report.thumbnailsRemoved)] : []),
+        ...(report.editingDataRemoved > 0 ? [removed.editingData] : []),
+      ].join(" · ");
       return (
         <span className="pdf-job">
           <span className="pdf-job__result" title={details}>

@@ -13,3 +13,4 @@
 | [ADR-0009](ADR-0009-github-release-downloads.md) | Publish installers as GitHub release assets under stable names | Accepted; asset replacement superseded by ADR-0010 |
 | [ADR-0010](ADR-0010-immutable-releases.md) | Published release assets and tags are immutable | Accepted |
 | [ADR-0011](ADR-0011-cooperative-cancellation.md) | Cooperative cancellation and channel-based progress for compressions | Accepted |
+| [ADR-0012](ADR-0012-metadata-removal.md) | Optional removal of metadata, thumbnails and editing data | Accepted |

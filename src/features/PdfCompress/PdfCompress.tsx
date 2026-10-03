@@ -38,8 +38,8 @@ function PdfCompress({ tool, active }: ToolPanelProps) {
 
   const choosePreset = (next: PresetId) => {
     setPreset(next);
-    if (next !== "custom") setOptions(PRESETS[next]);
-    else if (!options.images) setOptions(PRESETS.balanced);
+    if (next !== "custom") setOptions({ ...options, images: PRESETS[next].images });
+    else if (!options.images) setOptions({ ...options, images: PRESETS.balanced.images });
   };
   const editCustom = (next: PdfOptions) => {
     setPreset("custom");
@@ -92,6 +92,7 @@ function PdfCompress({ tool, active }: ToolPanelProps) {
               disabled={jobs.busy}
               onPreset={choosePreset}
               onCustom={editCustom}
+              onOptions={setOptions}
             />
             <section className="pdf-compress__files" aria-label={messages.intake.filesHeading(files.length)}>
               <div className="pdf-compress__summary">

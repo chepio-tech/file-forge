@@ -38,7 +38,10 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
 
 - Add PDFs through a native file picker or drag and drop a batch onto the window.
 - Choose Lossless, Balanced, Maximum or Custom settings with exact JPEG quality and DPI values.
-- Compare original/result sizes per file and for the batch, then save one result or all results to a folder.
+- Optionally remove metadata, page thumbnails and Illustrator/Photoshop editing data; PDF/A, PDF/UA and PDF/X
+  files keep the metadata they require.
+- Follow each file's progress, cancel a running batch, and compare original/result sizes per file and for the
+  batch, then save one result or all results to a folder.
 - Keep originals untouched. Results are never larger; encrypted and digitally signed PDFs are refused.
 - Work locally, with system light/dark themes and no file uploads.
 

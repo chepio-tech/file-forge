@@ -1,4 +1,5 @@
 // Components
+import Checkbox from "@/components/Checkbox/Checkbox";
 import NumberField from "@/components/NumberField/NumberField";
 import SegmentedControl from "@/components/SegmentedControl/SegmentedControl";
 // Types
@@ -15,11 +16,13 @@ interface PdfSettingsProps {
   onPreset: (preset: PresetId) => void;
   /** Editing a number switches to the custom preset. */
   onCustom: (options: PdfOptions) => void;
+  /** Removal options apply to any preset and do not change it. */
+  onOptions: (options: PdfOptions) => void;
 }
 
 const PRESET_IDS: PresetId[] = ["lossless", "balanced", "maximum", "custom"];
 
-function PdfSettings({ preset, options, disabled, onPreset, onCustom }: PdfSettingsProps) {
+function PdfSettings({ preset, options, disabled, onPreset, onCustom, onOptions }: PdfSettingsProps) {
   const lossy = options.images ?? PRESETS.balanced.images!;
   const hint = options.images
     ? messages.pdf.lossyHint(options.images.jpegQuality, options.images.maxDpi)
@@ -43,7 +46,7 @@ function PdfSettings({ preset, options, disabled, onPreset, onCustom }: PdfSetti
             max={JPEG_QUALITY.max}
             disabled={disabled || !options.images}
             onCommit={(jpegQuality) =>
-              onCustom({ images: { ...lossy, jpegQuality: jpegQuality ?? lossy.jpegQuality } })
+              onCustom({ ...options, images: { ...lossy, jpegQuality: jpegQuality ?? lossy.jpegQuality } })
             }
           />
           <NumberField
@@ -53,11 +56,27 @@ function PdfSettings({ preset, options, disabled, onPreset, onCustom }: PdfSetti
             max={MAX_DPI.max}
             placeholder={messages.pdf.noLimit}
             disabled={disabled || !options.images}
-            onCommit={(maxDpi) => onCustom({ images: { ...lossy, maxDpi } })}
+            onCommit={(maxDpi) => onCustom({ ...options, images: { ...lossy, maxDpi } })}
           />
         </div>
       </div>
       <p className="pdf-settings__hint">{hint}</p>
+      <div className="pdf-settings__removal">
+        <Checkbox
+          label={messages.pdf.stripMetadata}
+          hint={messages.pdf.stripMetadataHint}
+          checked={options.stripMetadata}
+          disabled={disabled}
+          onChange={(stripMetadata) => onOptions({ ...options, stripMetadata })}
+        />
+        <Checkbox
+          label={messages.pdf.stripEditingData}
+          hint={messages.pdf.stripEditingDataHint}
+          checked={options.stripEditingData}
+          disabled={disabled}
+          onChange={(stripEditingData) => onOptions({ ...options, stripEditingData })}
+        />
+      </div>
     </section>
   );
 }

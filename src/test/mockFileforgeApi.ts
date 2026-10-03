@@ -69,6 +69,10 @@ export function report(_id: number, overrides: Partial<PdfReport> = {}): PdfRepo
     imagesDownsampled: 1,
     duplicatesMerged: 0,
     unusedObjectsRemoved: 4,
+    metadataRemoved: false,
+    metadataKeptForStandard: false,
+    thumbnailsRemoved: 0,
+    editingDataRemoved: 0,
     ...overrides,
   };
 }

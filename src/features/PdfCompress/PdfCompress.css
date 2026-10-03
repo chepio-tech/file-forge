@@ -47,6 +47,13 @@
   font-size: var(--text-sm);
 }
 
+.pdf-settings__removal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  padding-top: var(--space-1);
+}
+
 /* Per-file status */
 
 .pdf-job {

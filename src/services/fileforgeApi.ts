@@ -33,9 +33,13 @@ export interface ImageOptions {
   maxDpi: number | null;
 }
 
-/** `images: null` is the lossless preset. */
+/** `images: null` is the lossless preset. The removal options work with every preset (ADR-0012). */
 export interface PdfOptions {
   images: ImageOptions | null;
+  /** Info, XMP and page thumbnails; files declaring PDF/A, PDF/UA or PDF/X keep their document metadata. */
+  stripMetadata: boolean;
+  /** `/PieceInfo`: Illustrator/Photoshop private data. */
+  stripEditingData: boolean;
 }
 
 export interface PdfReport {
@@ -48,6 +52,11 @@ export interface PdfReport {
   imagesDownsampled: number;
   duplicatesMerged: number;
   unusedObjectsRemoved: number;
+  metadataRemoved: boolean;
+  /** Removal was asked for, but the file declares a standard that requires its document metadata. */
+  metadataKeptForStandard: boolean;
+  thumbnailsRemoved: number;
+  editingDataRemoved: number;
 }
 
 /** Pipeline stages in the order the engine runs them; `images` only runs for lossy presets. */

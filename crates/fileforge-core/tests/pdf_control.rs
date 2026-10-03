@@ -12,7 +12,8 @@ use fileforge_core::pdf::{
 // Utils
 use support::PdfBuilder;
 
-const BALANCED: PdfOptions = PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }) };
+const BALANCED: PdfOptions =
+    PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }), ..PdfOptions::LOSSLESS };
 /// Images decoded at once by the engine (`MAX_PARALLEL_IMAGES`).
 const MAX_PARALLEL_IMAGES: u32 = 4;
 
