@@ -37,7 +37,8 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
 ## What works
 
 - Add PDFs through a native file picker or drag and drop a batch onto the window.
-- Choose Lossless, Balanced, Maximum or Custom settings with exact JPEG quality and DPI values.
+- Choose Lossless, Balanced, Maximum, Screen or Custom settings with exact JPEG quality and DPI values. JPEG and
+  JPEG 2000 images are re-encoded as JPEG; Screen (100 DPI) makes scans much smaller for on-screen reading.
 - Optionally remove metadata, page thumbnails and Illustrator/Photoshop editing data; PDF/A, PDF/UA and PDF/X
   files keep the metadata they require.
 - Follow each file's progress, cancel a running batch, and compare original/result sizes per file and for the
@@ -49,7 +50,7 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
 
 ## Develop
 
-Requirements: Rust (stable, 1.88+), Node.js LTS, pnpm 10, and the
+Requirements: Rust (stable, 1.92+), Node.js LTS, pnpm 10, and the
 [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
 
 ```sh

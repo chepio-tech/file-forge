@@ -11,6 +11,7 @@ mod dedupe;
 mod error;
 mod guards;
 mod images;
+mod jpx;
 mod limits;
 mod metadata;
 mod objects;

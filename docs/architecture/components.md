@@ -11,7 +11,7 @@ flowchart LR
 |---|---|---|
 | Web UI `src/` | Layout, state of tool panels, UI strings, presentation of results | Import `@tauri-apps/*` outside `src/services/fileforgeApi.ts`; handle paths |
 | Desktop shell `src-tauri/` | IPC commands, `FileRegistry` (session ids → paths), `ResultStore` (temp results, one compression at a time), `Cancellation` and progress throttling (`job_control`), app updates (`updates`), native dialogs, drop events | Contain processing logic |
-| Core `crates/fileforge-core/` | `FileKind` detection, PDF engine (`pdf/`: control, guards, metadata, dedupe, placement, images, streams) | Depend on `tauri` or any UI crate; touch global state |
+| Core `crates/fileforge-core/` | `FileKind` detection, PDF engine (`pdf/`: control, guards, metadata, dedupe, placement, images, jpx, streams) | Depend on `tauri` or any UI crate; touch global state |
 
 Allowed dependency directions: UI → shell (IPC only) → core. Core depends on nothing app-specific.
 

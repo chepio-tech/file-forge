@@ -6,7 +6,7 @@
    checks that the opened file is regular, checks its size, and reads at most the input limit plus one byte.
    Files that grow beyond the limit during the read are refused too.
 3. `fileforge_core::pdf::compress_controlled` (in `spawn_blocking`): load → refuse encrypted/signed → (on request)
-   remove metadata, thumbnails and editing data → merge duplicate streams → drop unreachable objects → image pass (lossy presets, ≤ 4 images in parallel) → re-deflate →
+   remove metadata, thumbnails and editing data → merge duplicate streams → drop unreachable objects → image pass (lossy presets, ≤ 4 images in parallel; JPEG and JPEG 2000 → JPEG, raw → downsampled Deflate) → re-deflate →
    save (object + cross-reference streams, or classic for PDF/A-1) → reload and check page count → keep only if
    smaller. Each stage reports progress to the UI through the call's channel.
 4. Shell writes the result atomically to the temp store and returns the `PdfReport`.
@@ -36,10 +36,11 @@ clears temp results; on Windows the plugin exits from the installer hook, which 
 | Input file | 1 GiB (`MAX_INPUT_BYTES`) | `crates/fileforge-core/src/pdf/limits.rs` |
 | Decoded size of any stream read | 512 MiB | same |
 | Pixels per image touched | 150 MP | same |
+| Samples per JPEG 2000 image decoded (pixels × channels) | 100 M (≈ 0.8 GB while decoding) | same |
 | Images decoded concurrently | 4 | `crates/fileforge-core/src/pdf/images.rs` |
 | Concurrent compressions | 1 | `ResultStore::work_slot` |
 
-Peak memory ≈ input + parsed document + up to 4 decoded bitmaps.
+Peak memory ≈ input + parsed document + up to 4 decoded bitmaps (JPEG 2000 decoding: up to ~8 bytes per sample).
 
 ## Failure modes
 | Failure | Behavior |
@@ -47,6 +48,7 @@ Peak memory ≈ input + parsed document + up to 4 decoded bitmaps.
 | Malformed / truncated file | `pdfMalformed` for that file; others continue |
 | Encrypted or signed | `pdfEncrypted` / `pdfSigned`, file untouched |
 | One image fails to decode or re-encode | Image left as is, document still compressed |
+| The JPEG 2000 decoder panics on one image | Caught for that image (ADR-0015); image left as is, document still compressed |
 | Output fails to reload or loses pages | `internal`, nothing stored |
 | User cancels | `cancelled` for the current file, nothing stored, later files not started, earlier results kept |
 | Panic inside a dependency | Caught by `spawn_blocking` (release builds unwind), `internal` for that file |
@@ -65,12 +67,16 @@ Peak memory ≈ input + parsed document + up to 4 decoded bitmaps.
 No network, no retries, no timeouts needed: everything is local and user-initiated.
 
 ## Measured (Apple M-series, release build, 2026-10-03)
-| File | Lossless | Balanced | Maximum |
-|---|---|---|---|
-| 4-page scan, 4 × 36 MP JPEG at 300 DPI, 18.7 MB | 0% | −84.6% (2.3 s) | −95.5% (1.0 s) |
-| Text, 231 pages, 1.28 MB | −33% (0.24 s) | same | same |
-| Text licences, 0.55–0.77 MB | −10…27% | same | same |
-| Vector artwork, 0.8 MB | −4.9% | same | same |
+| File | Lossless | Balanced | Maximum | Screen |
+|---|---|---|---|---|
+| 4-page scan, 4 × 36 MP JPEG at 300 DPI, 18.7 MB | 0% | −84.6% (2.3 s) | −95.5% (1.0 s) | not measured |
+| Text, 231 pages, 1.28 MB | −33% (0.24 s) | same | same | same |
+| Text licences, 0.55–0.77 MB | −10…27% | same | same | same |
+| Vector artwork, 0.8 MB | −4.9% | same | same | same |
+| Scanned textbook, 192 pages, 1,101 JPEG 2000 strips at 150 DPI, 55.3 MB (2026-10-03, ADR-0015) | −0.1% | −1.7% (4.2 s) | −16.4% (4.3 s) | −55.2% (5.7 s) |
+
+JPEG decoding moved to `jpeg-decoder` (ADR-0015). On a generated 4-page PDF repeating one 36 MP JPEG it takes 1.05 s
+(Balanced) and 0.76 s (Maximum), against 0.98 s and 0.66 s before.
 
 Reproduce: `cargo run --release -p fileforge-core --example measure_pdf -- <files>`.
 

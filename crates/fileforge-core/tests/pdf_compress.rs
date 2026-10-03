@@ -4,9 +4,9 @@ mod support;
 
 // Core
 use fileforge_core::pdf::{ImageOptions, PdfError, PdfOptions, compress};
-use lopdf::{Document, Object, ObjectId};
+use lopdf::{Dictionary, Document, Object, ObjectId};
 // Utils
-use support::{PdfBuilder, jpeg};
+use support::{PdfBuilder, decode_jpeg, jpeg, jpx_rgb_16x12, mean_error, photo};
 
 const BALANCED: PdfOptions =
     PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }), ..PdfOptions::LOSSLESS };
@@ -41,6 +41,22 @@ fn image_streams(doc: &Document) -> Vec<(ObjectId, &lopdf::Stream)> {
 fn dimensions(stream: &lopdf::Stream) -> (i64, i64) {
     let get = |key: &[u8]| stream.dict.get(key).and_then(Object::as_i64).expect("dimension");
     (get(b"Width"), get(b"Height"))
+}
+
+fn filter(stream: &lopdf::Stream) -> Option<&[u8]> {
+    stream.dict.get(b"Filter").and_then(Object::as_name).ok()
+}
+
+/// A change to an image dictionary.
+type Edit = fn(&mut Dictionary);
+
+/// A page showing the 16×12 px JPEG 2000 fixture `edit`ed at `width_pt`×`height_pt`.
+fn jpx_page(content: Vec<u8>, width_pt: f64, height_pt: f64, edit: Edit) -> Vec<u8> {
+    let mut pdf = PdfBuilder::default();
+    let image = pdf.image(16, 12, "DeviceRGB", Some("JPXDecode"), content);
+    edit(pdf.dict_mut(image));
+    pdf.page(&format!("q {width_pt} 0 0 {height_pt} 72 72 cm /J Do Q"), &[("J", image)]);
+    pdf.bytes()
 }
 
 #[test]
@@ -107,9 +123,25 @@ fn balanced_downsamples_photos_shown_above_the_target_dpi() {
     let result = load(&output.bytes);
     let images = image_streams(&result);
     assert_eq!(dimensions(images[0].1), (800, 600));
-    let decoded = image::load_from_memory(&images[0].1.content).expect("valid JPEG");
-    assert_eq!((decoded.width(), decoded.height()), (800, 600));
+    let (width, height, _) = decode_jpeg(&images[0].1.content);
+    assert_eq!((width, height), (800, 600));
     assert!(output.bytes.len() < input.len() / 4, "{} → {}", input.len(), output.bytes.len());
+}
+
+#[test]
+fn compressing_our_own_output_again_keeps_the_pixels() {
+    let mut pdf = PdfBuilder::default();
+    let photo_id = pdf.jpeg_image(320, 240, 95, false);
+    pdf.page("q 320 0 0 240 72 72 cm /P Do Q", &[("P", photo_id)]);
+    let once = compress(&pdf.bytes(), &BALANCED).expect("first pass");
+
+    let twice = compress(&once.bytes, &MAXIMUM).expect("second pass");
+
+    // zune-jpeg 0.5.15 misread the engine's own optimized-Huffman JPEGs; the second pass then saved garbage (error ~58).
+    assert_eq!(twice.report.images_recompressed, 1);
+    let result = load(&twice.bytes);
+    let error = mean_error(&decode_jpeg(&image_streams(&result)[0].1.content).2, &photo(320, 240, false));
+    assert!(error < 10.0, "mean error {error:.1} per sample after two passes");
 }
 
 #[test]
@@ -166,6 +198,67 @@ fn unsupported_color_spaces_are_left_byte_identical() {
 
     assert_eq!(output.report.images_recompressed, 0);
     assert_eq!(image_streams(&load(&output.bytes))[0].1.content, bytes);
+}
+
+#[test]
+fn jpeg2000_images_become_jpeg_when_clearly_smaller() {
+    let jpx = jpx_rgb_16x12();
+    // 7.68×5.76 pt shows 16×12 px at exactly 150 DPI: Maximum keeps the size. The bit depth is optional for JPEG 2000.
+    let input = jpx_page(jpx.clone(), 7.68, 5.76, |dict| {
+        dict.remove(b"BitsPerComponent");
+    });
+
+    let output = compress(&input, &MAXIMUM).expect("compresses");
+
+    assert_eq!((output.report.images_recompressed, output.report.images_downsampled), (1, 0));
+    let result = load(&output.bytes);
+    let (_, stream) = image_streams(&result)[0];
+    assert_eq!(filter(stream), Some(&b"DCTDecode"[..]));
+    assert_eq!(stream.dict.get(b"BitsPerComponent").and_then(Object::as_i64).ok(), Some(8));
+    assert_eq!(dimensions(stream), (16, 12));
+    assert!(stream.content.len() < jpx.len(), "{} → {}", jpx.len(), stream.content.len());
+    // The fixture is lossless, so the result must equal encoding the source pixels directly at the same quality.
+    assert_eq!(decode_jpeg(&stream.content).2, decode_jpeg(&jpeg(16, 12, 70, false)).2);
+}
+
+#[test]
+fn jpeg2000_images_are_downsampled_to_the_target_dpi() {
+    // 3.84×2.88 pt shows 16×12 px at 300 DPI; Maximum targets 150 DPI → 8×6 px.
+    let input = jpx_page(jpx_rgb_16x12(), 3.84, 2.88, |_| {});
+
+    let output = compress(&input, &MAXIMUM).expect("compresses");
+
+    assert_eq!((output.report.images_recompressed, output.report.images_downsampled), (1, 1));
+    let result = load(&output.bytes);
+    let (_, stream) = image_streams(&result)[0];
+    assert_eq!((filter(stream), dimensions(stream)), (Some(&b"DCTDecode"[..]), (8, 6)));
+}
+
+#[test]
+fn unusual_jpeg2000_images_are_left_byte_identical() {
+    let jpx = jpx_rgb_16x12();
+    let cases: [(&str, Vec<u8>, Edit); 7] = [
+        ("alpha used as soft mask", jpx.clone(), |dict| dict.set("SMaskInData", 1)),
+        ("Decode array", jpx.clone(), |dict| {
+            dict.set("Decode", [1, 0, 1, 0, 1, 0].map(Object::from).to_vec());
+        }),
+        ("CMYK dictionary", jpx.clone(), |dict| dict.set("ColorSpace", "DeviceCMYK")),
+        ("gray dictionary, RGB codestream", jpx.clone(), |dict| dict.set("ColorSpace", "DeviceGray")),
+        ("16-bit dictionary", jpx.clone(), |dict| dict.set("BitsPerComponent", 16)),
+        ("size differs from the codestream", jpx.clone(), |dict| dict.set("Width", 15)),
+        ("not a codestream", b"not a JPEG 2000 codestream".to_vec(), |_| {}),
+    ];
+    for (case, content, edit) in cases {
+        // Shown at 300 DPI, so Maximum would downsample any image it accepts.
+        let input = jpx_page(content.clone(), 3.84, 2.88, edit);
+
+        let output = compress(&input, &MAXIMUM).expect("compresses");
+
+        assert_eq!(output.report.images_recompressed, 0, "{case}");
+        let result = load(&output.bytes);
+        let (_, stream) = image_streams(&result)[0];
+        assert_eq!((filter(stream), &stream.content), (Some(&b"JPXDecode"[..]), &content), "{case}");
+    }
 }
 
 #[test]
