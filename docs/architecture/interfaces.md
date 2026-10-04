@@ -13,6 +13,8 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 
 ## Commands and events today
 - `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`.
+- `set_drop_kinds(kinds)` — the shown tool's file kinds; dropped folders contribute only files with their
+  extensions (ADR-0017). Until set, folders contribute nothing.
 - `remove_file` — forget a registered file and its unsaved result.
 - `compress_pdf(id, options, onProgress)` → `PdfReport`. Options:
   `{ images: null | { jpegQuality, maxDpi | null, compressFlatePhotos }, stripMetadata, stripEditingData }`;
@@ -36,7 +38,9 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 - `install_update(discardUnsaved)` — downloads, verifies and installs the update found by the last check, then
   restarts, so it settles only on failure: `busy` while the work slot is held, `unsavedResults` when results were
   never saved and `discardUnsaved` is `false`, `update` for network, signature or installer failures.
-- Event `files-added` — files dropped on the window, already registered → `RegisterOutcome`.
+- Event `files-added` — files dropped on the window, already registered → `RegisterOutcome`. Dropped folders
+  arrive expanded; `folders: { folders, added, ignored, truncated }` is present only when the drop contained
+  folders (ADR-0017).
 - The UI also listens to the webview's drag-enter/leave events for hover feedback only (paths ignored).
 
 Error codes: `unknownFile`, `noResult`, `originalTarget`, `notAFile`, `pdfTooLarge`, `pdfEncrypted`, `pdfSigned`, `pdfMalformed`,

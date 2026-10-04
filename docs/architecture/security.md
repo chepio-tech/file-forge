@@ -18,6 +18,12 @@
 - Context menu disabled in production builds (`src/main.tsx`).
 - React escapes all file names; never render file-derived strings as HTML.
 
+## Dropped folders (ADR-0017)
+Folder layouts are untrusted too. The search never follows links to folders, searches a folder reached twice once
+(by canonical path), skips names starting with `.` and does not enter macOS packages. Depth, entries examined and
+files added are capped per drop (`docs/architecture/runtime.md`). Found paths stay in Rust; the webview receives the
+registered files and counts only.
+
 ## Data handling
 - Registry entries and temp results live for the session only and are not persisted.
 - Originals are opened read-only; input paths stay protected for the whole session, even when removed from the

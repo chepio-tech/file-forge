@@ -41,6 +41,15 @@ const messages = {
     clear: "Clear list",
     skipped: (names: string) => `Skipped (not a file): ${names}`,
     wrongKind: (formats: string, names: string) => `Only ${formats} files are accepted here. Skipped: ${names}`,
+    /** Dropped folders are searched for the tool's formats (ADR-0017); `folders` is how many were dropped. */
+    noneInFolders: (formats: string, folders: number) =>
+      `No ${formats} files found in the dropped ${folders === 1 ? "folder" : "folders"}.`,
+    ignoredInFolders: (count: number, folders: number) =>
+      `${count} ${count === 1 ? "file of another type" : "files of other types"} in the dropped ${folders === 1 ? "folder" : "folders"} ${count === 1 ? "was" : "were"} not added.`,
+    foldersTruncated: (folders: number) =>
+      folders === 1
+        ? "The dropped folder is too large or too deeply nested to add at once, so some files were not added. Drop smaller folders."
+        : "The dropped folders are too large or too deeply nested to add at once, so some files were not added. Drop smaller folders.",
     dismiss: "Dismiss",
   },
   pdf: {

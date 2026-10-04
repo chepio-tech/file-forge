@@ -87,6 +87,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      - name: Test native installer bitmap filtering at 100%, 150% and 200%
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./.github/scripts/installerDpiTest/installerDpiTest.ps1
+
       - name: Collect installers under stable names
         shell: bash
         env:

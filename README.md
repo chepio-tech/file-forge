@@ -36,7 +36,8 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
 
 ## What works
 
-- Add PDFs through a native file picker or drag and drop a batch onto the window.
+- Add PDFs through a native file picker or drag and drop files and folders onto the window. Folders are searched
+  for PDFs, including subfolders; hidden files and app or document packages are left out.
 - Choose Lossless, Balanced, Maximum, Screen or Custom settings with exact JPEG quality and DPI values. JPEG and
   JPEG 2000 images are re-encoded as JPEG; Screen (100 DPI) makes scans much smaller for on-screen reading.
 - Maximum also converts suitable losslessly stored photographs to JPEG when it saves at least 20%. Detected
@@ -84,7 +85,7 @@ see [deployment](docs/architecture/deployment.md).
 
 - PDF inputs are limited to 1 GiB; compression runs one document at a time.
 - Cancel stops a running document at its next checkpoint; parsing and saving a document are not interrupted.
-  Folder drops are skipped.
+- One drop adds up to 1,000 files from folders, searched up to 16 levels deep.
 - Unsupported image encodings are preserved; lossy presets do not guarantee additional savings on every PDF.
 - Photo/screenshot detection uses pixel heuristics and may misclassify unusual content; Lossless preserves every
   image's pixels. A screenshot displaying only a photograph is indistinguishable from that photograph.
