@@ -42,6 +42,8 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
   JPEG 2000 images are re-encoded as JPEG; Screen (100 DPI) makes scans much smaller for on-screen reading.
 - Maximum also converts suitable losslessly stored photographs to JPEG when it saves at least 20%. Detected
   screenshots and line art keep lossless image encoding; the preset's DPI downsampling still applies.
+- Even Lossless trims unused data from embedded CFF fonts (common in PDFs saved on macOS) without changing a
+  single glyph.
 - Optionally remove metadata, page thumbnails and Illustrator/Photoshop editing data; PDF/A, PDF/UA and PDF/X
   files keep the metadata they require.
 - Follow each file's progress, cancel a running batch, and compare original/result sizes per file and for the

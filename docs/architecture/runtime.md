@@ -6,9 +6,10 @@
    checks that the opened file is regular, checks its size, and reads at most the input limit plus one byte.
    Files that grow beyond the limit during the read are refused too.
 3. `fileforge_core::pdf::compress_controlled` (in `spawn_blocking`): load → refuse encrypted/signed → (on request)
-   remove metadata, thumbnails and editing data → merge duplicate streams → drop unreachable objects → image pass
-   (lossy presets, ≤ 4 images in parallel; JPEG and JPEG 2000 → JPEG, raw → downsampled Deflate; suitable Flate
-   photographs → JPEG with `compressFlatePhotos`, Maximum, ADR-0016) → re-deflate →
+   remove metadata, thumbnails and editing data → merge duplicate streams → drop unreachable objects → empty CFF
+   subroutines no glyph calls (every preset, ADR-0018) → image pass (lossy presets, ≤ 4 images in parallel; JPEG
+   and JPEG 2000 → JPEG, raw → downsampled Deflate; suitable Flate photographs → JPEG with `compressFlatePhotos`,
+   Maximum, ADR-0016) → re-deflate →
    save (object + cross-reference streams, or classic for PDF/A-1) → reload and check page count → keep only if
    smaller. Each stage reports progress to the UI through the call's channel.
 4. Shell writes the result atomically to the temp store and returns the `PdfReport`.
@@ -42,6 +43,7 @@ clears temp results; on Windows the plugin exits from the installer hook, which 
 | Pixels per image touched | 150 MP | same |
 | Samples per JPEG 2000 image decoded (pixels × channels) | 100 M (≈ 0.8 GB while decoding) | same |
 | Images decoded concurrently | 4 | `crates/fileforge-core/src/pdf/images.rs` |
+| Charstring bytes interpreted per CFF font (scan budget) | 64 M; beyond it the font stays as it is | `crates/fileforge-core/src/pdf/cff.rs` |
 | Concurrent compressions | 1 | `ResultStore::work_slot` |
 | Folder levels searched below a dropped folder | 16 | `src-tauri/src/folder_scan.rs` (`ScanLimits`) |
 | Directory entries examined per drop | 10,000 | same |
@@ -86,6 +88,12 @@ No network, no retries, no timeouts needed: everything is local and user-initiat
 
 JPEG decoding moved to `jpeg-decoder` (ADR-0015). On a generated 4-page PDF repeating one 36 MP JPEG it takes 1.05 s
 (Balanced) and 0.76 s (Maximum), against 0.98 s and 0.66 s before.
+
+CFF subroutine pruning (ADR-0018, 2026-10-04, measured on `main` `2848f15` with and without it): on 277 distinct
+non-private PDFs from macOS and app bundles (54.6 MB), Lossless saves 18.7% instead of 15.3% (Balanced 19.2/15.8%,
+Maximum 19.4/15.9%, Screen 19.5/16.0%); no file grew and the run time stayed 4.8 s. macOS icon PDFs with SF Pro
+subsets shrink by 93–95% (344 → 17 KB); a one-page Quartz PDF (macOS 26) with STIX and Noto text 61 → 27 KB.
+Rendered with Quartz at 2×, all 1,372 pages match the originals (Lossless) and the Maximum results without pruning.
 
 Reproduce: `cargo run --release -p fileforge-core --example measure_pdf -- <files>`.
 

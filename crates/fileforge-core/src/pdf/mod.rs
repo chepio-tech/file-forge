@@ -2,13 +2,16 @@
 //!
 //! Pipeline: load with decode limits → refuse encrypted and signed files → (optional) remove metadata and editing
 //! data → merge identical streams → drop
-//! unreachable objects → (lossy presets) re-encode and downsample images → re-deflate streams → save with object
+//! unreachable objects → empty CFF subroutines no glyph calls → (lossy presets) re-encode and downsample images →
+//! re-deflate streams → save with object
 //! and cross-reference streams → reload to verify → fall back to the original bytes unless the result is smaller.
 //! Every stage reports progress and checks for cancellation through a [`Control`].
 
+mod cff;
 mod control;
 mod dedupe;
 mod error;
+mod fonts;
 mod guards;
 mod images;
 mod jpx;
@@ -114,6 +117,8 @@ pub(crate) fn compress_with_limits(
     }
     report.duplicates_merged = dedupe::merge_identical_streams(&mut doc);
     report.unused_objects_removed = objects::prune_unreachable(&mut doc);
+    // Every preset: glyphs execute exactly as before, only subroutines no glyph calls go (ADR-0018).
+    fonts::prune_font_programs(&mut doc, limits.max_stream_bytes, control);
     if let Some(image_options) = &options.images {
         // Finding placements walks every page; it is reported as the uncounted start of the image stage.
         checkpoint(control, Stage::Images)?;
