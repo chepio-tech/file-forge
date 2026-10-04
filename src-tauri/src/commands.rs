@@ -14,6 +14,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 // Types
+use crate::drag_drop::DropKinds;
 use crate::error::AppError;
 use crate::file_registry::{FileId, FileRegistry, RegisterOutcome};
 use crate::job_control::{Cancellation, JobControl};
@@ -42,6 +43,13 @@ pub async fn pick_files(
     })
     .await
     .map_err(AppError::from)
+}
+
+/// Sets the kinds dropped folders contribute; the tool that is shown calls it (ADR-0017). Cheap and non-blocking, so
+/// it runs synchronously.
+#[tauri::command]
+pub fn set_drop_kinds(drop_kinds: State<'_, DropKinds>, kinds: Vec<FileKind>) {
+    drop_kinds.set(kinds);
 }
 
 /// Forgets a file the user removed from the list, together with its unsaved result.

@@ -17,3 +17,4 @@
 | [ADR-0013](ADR-0013-in-app-updates.md) | In-app updates from signed GitHub release artifacts | Accepted |
 | [ADR-0014](ADR-0014-product-name.md) | The product name is "File Forge" and stays fixed once updates ship | Accepted |
 | [ADR-0015](ADR-0015-jpeg2000-and-screen-preset.md) | JPEG 2000 images become JPEG, a Screen preset, and reference-accurate image decoders | Accepted |
+| [ADR-0017](ADR-0017-folder-drops.md) | Dropped folders are searched in Rust for the active tool's file types | Accepted |

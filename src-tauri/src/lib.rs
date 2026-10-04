@@ -5,6 +5,7 @@ mod commands;
 mod drag_drop;
 mod error;
 mod file_registry;
+mod folder_scan;
 mod job_control;
 mod results;
 mod updates;
@@ -12,6 +13,7 @@ mod updates;
 // Core
 use tauri::{Manager, RunEvent};
 // Types
+use crate::drag_drop::DropKinds;
 use crate::file_registry::FileRegistry;
 use crate::job_control::Cancellation;
 use crate::results::ResultStore;
@@ -24,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(FileRegistry::default())
+        .manage(DropKinds::default())
         .manage(Cancellation::default())
         .manage(PendingUpdate::default())
         .setup(|app| {
@@ -33,6 +36,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::pick_files,
+            commands::set_drop_kinds,
             commands::remove_file,
             commands::compress_pdf,
             commands::cancel_compression,

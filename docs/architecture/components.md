@@ -17,6 +17,7 @@ Allowed dependency directions: UI → shell (IPC only) → core. Core depends on
 
 Inside the shell, module dependencies flow from `error` (types) ← `file_registry`,
 `results`, `job_control` (state) ← `updates` (uses `results`) ← `commands`, `drag_drop` (handlers).
+`file_registry` uses `folder_scan` (bounded search of dropped folders, ADR-0017).
 
 UI structure: `components/` shared presentational pieces, plus `UpdateStatus` (sidebar app updates, with its
 `useUpdates` hook); `features/` one folder per tool plus

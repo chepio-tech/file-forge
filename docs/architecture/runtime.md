@@ -39,6 +39,9 @@ clears temp results; on Windows the plugin exits from the installer hook, which 
 | Samples per JPEG 2000 image decoded (pixels × channels) | 100 M (≈ 0.8 GB while decoding) | same |
 | Images decoded concurrently | 4 | `crates/fileforge-core/src/pdf/images.rs` |
 | Concurrent compressions | 1 | `ResultStore::work_slot` |
+| Folder levels searched below a dropped folder | 16 | `src-tauri/src/folder_scan.rs` (`ScanLimits`) |
+| Directory entries examined per drop | 10,000 | same |
+| Files added from dropped folders per drop | 1,000 | same |
 
 Peak memory ≈ input + parsed document + up to 4 decoded bitmaps (JPEG 2000 decoding: up to ~8 bytes per sample).
 
@@ -46,6 +49,8 @@ Peak memory ≈ input + parsed document + up to 4 decoded bitmaps (JPEG 2000 dec
 | Failure | Behavior |
 |---|---|
 | Malformed / truncated file | `pdfMalformed` for that file; others continue |
+| Dropped folder cannot be read | Named in the intake notice; the rest of the drop is added |
+| Dropped folders exceed a search limit | Files found so far are added; the notice says some were not (ADR-0017) |
 | Encrypted or signed | `pdfEncrypted` / `pdfSigned`, file untouched |
 | One image fails to decode or re-encode | Image left as is, document still compressed |
 | The JPEG 2000 decoder panics on one image | Caught for that image (ADR-0015); image left as is, document still compressed |

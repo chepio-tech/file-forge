@@ -17,6 +17,7 @@ use fileforge_core::file_kind::SNIFF_LEN;
 use serde::Serialize;
 // Types
 use crate::error::AppError;
+use crate::folder_scan::{FolderScan, FolderScanner, ScanLimits, is_package};
 
 pub type FileId = u64;
 
@@ -30,12 +31,16 @@ pub struct FileInfo {
     pub kind: FileKind,
 }
 
-/// Result of registering a batch: accepted files plus the names of entries that were skipped (folders, unreadable).
+/// Result of registering a batch: accepted files plus the names of entries that were skipped (unreadable, not regular
+/// files, packages).
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisterOutcome {
     pub files: Vec<FileInfo>,
     pub skipped: Vec<String>,
+    /// Present when the drop contained folders (ADR-0017).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folders: Option<FolderScan>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +75,44 @@ impl FileRegistry {
                 Err(_) => outcome.skipped.push(display_name(&path)),
             }
         }
+        outcome
+    }
+
+    /// Registers dropped files as they are, and from dropped folders the files whose extension belongs to `kinds`
+    /// (ADR-0017). Packages count as files: a dropped package is skipped, not searched.
+    pub fn register_dropped(&self, paths: impl IntoIterator<Item = PathBuf>, kinds: &[FileKind]) -> RegisterOutcome {
+        self.register_dropped_with_limits(paths, kinds, ScanLimits::DEFAULT)
+    }
+
+    fn register_dropped_with_limits(
+        &self,
+        paths: impl IntoIterator<Item = PathBuf>,
+        kinds: &[FileKind],
+        limits: ScanLimits,
+    ) -> RegisterOutcome {
+        let mut outcome = RegisterOutcome::default();
+        let mut scanner = FolderScanner::new(kinds, limits);
+        let mut unreadable = Vec::new();
+        for path in paths {
+            if !path.is_dir() || is_package(&path) {
+                match self.register(path.clone()) {
+                    Ok(info) => outcome.files.push(info),
+                    Err(_) => outcome.skipped.push(display_name(&path)),
+                }
+                continue;
+            }
+            for file in scanner.scan(&path, &mut unreadable) {
+                match self.register(file.clone()) {
+                    Ok(info) => {
+                        scanner.summary.added = scanner.summary.added.saturating_add(1);
+                        outcome.files.push(info);
+                    }
+                    Err(_) => outcome.skipped.push(display_name(&file)),
+                }
+            }
+        }
+        outcome.skipped.extend(unreadable.iter().map(|path| display_name(path)));
+        outcome.folders = (scanner.summary.folders > 0).then_some(scanner.summary);
         outcome
     }
 
@@ -194,6 +237,73 @@ mod tests {
 
         assert_eq!(outcome.files.len(), 1);
         assert_eq!(outcome.skipped, vec!["Scans".to_owned(), "gone.pdf".to_owned()]);
+    }
+
+    #[test]
+    fn dropped_folders_add_accepted_files_in_drop_order() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let first = write(dir.path(), "first.pdf", b"%PDF-1.4");
+        let scans = dir.path().join("Scans");
+        std::fs::create_dir_all(scans.join("2024")).expect("sub dirs");
+        write(&scans, "b.pdf", b"%PDF-1.7");
+        write(&scans.join("2024"), "a.pdf", b"%PDF-1.7");
+        write(&scans, "fake.pdf", b"PK\x03\x04");
+        write(&scans, "photo.jpg", b"\xFF\xD8\xFF");
+        let package = dir.path().join("Letter.pages");
+        std::fs::create_dir(&package).expect("package");
+        write(&package, "preview.pdf", b"%PDF-1.7");
+        let direct_image = write(dir.path(), "direct.jpg", b"\xFF\xD8\xFF");
+        let registry = FileRegistry::default();
+
+        let outcome = registry.register_dropped([first, scans, package, direct_image], &[FileKind::Pdf]);
+
+        let names: Vec<_> = outcome.files.iter().map(|file| (file.name.as_str(), file.kind)).collect();
+        assert_eq!(
+            names,
+            [
+                ("first.pdf", FileKind::Pdf),
+                ("a.pdf", FileKind::Pdf),
+                ("b.pdf", FileKind::Pdf),
+                // The extension selects it; the content decides its kind, so the UI rejects it by name.
+                ("fake.pdf", FileKind::Other),
+                // Dropped directly: registered whatever its kind, as before folders were expanded.
+                ("direct.jpg", FileKind::Image),
+            ]
+        );
+        assert_eq!(outcome.skipped, ["Letter.pages"]);
+        assert_eq!(outcome.folders, Some(FolderScan { folders: 1, added: 3, ignored: 1, truncated: false }));
+    }
+
+    #[test]
+    fn drops_without_folders_report_no_folder_summary() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let pdf = write(dir.path(), "only.pdf", b"%PDF-1.4");
+        let registry = FileRegistry::default();
+
+        let outcome = registry.register_dropped([pdf, dir.path().join("gone.pdf")], &[FileKind::Pdf]);
+
+        assert_eq!((outcome.files.len(), outcome.skipped.as_slice()), (1, &["gone.pdf".to_owned()][..]));
+        assert_eq!(outcome.folders, None);
+        let json = serde_json::to_value(&outcome).expect("serializes");
+        assert!(json.get("folders").is_none(), "omitted for the UI: {json}");
+    }
+
+    #[test]
+    fn folder_summary_serializes_for_the_ui() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        for index in 0..3 {
+            write(dir.path(), &format!("{index}.pdf"), b"%PDF-1.4");
+        }
+        let registry = FileRegistry::default();
+        let limits = ScanLimits { max_files: 2, ..ScanLimits::DEFAULT };
+
+        let outcome = registry.register_dropped_with_limits([dir.path().to_path_buf()], &[FileKind::Pdf], limits);
+
+        assert_eq!(outcome.files.len(), 2);
+        assert_eq!(
+            serde_json::to_value(&outcome).expect("serializes")["folders"],
+            serde_json::json!({ "folders": 1, "added": 2, "ignored": 0, "truncated": true })
+        );
     }
 
     #[test]
