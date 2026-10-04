@@ -29,6 +29,12 @@ Limits on file size, decoded stream size and image pixels (`docs/architecture/ru
 files are refused rather than rewritten (`docs/domain/invariants.md`); the engine is exercised with corrupted inputs
 in `crates/fileforge-core/tests/pdf_compress.rs`.
 
+Image decoders read attacker-controlled bytes, so they are memory-safe Rust (ADR-0015). `jpeg-decoder` runs with
+`platform_independent` (no unsafe code). `hayro-jpeg2000` forbids unsafe code itself; its SIMD comes from
+`fearless_simd`. It is pinned to a reviewed git commit, so Dependabot does not update it. JPEG 2000 images are
+checked against the dictionary and the sample limit before decoding, and a panic inside that decoder only skips
+the image. Broken codestreams are fuzzed in the `pdf::jpx` unit tests.
+
 ## Temp results
 Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
 the next start. Staging files are created exclusively, flushed and closed before publication, and removed on failure.

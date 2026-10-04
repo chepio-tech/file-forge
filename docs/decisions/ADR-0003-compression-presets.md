@@ -1,7 +1,7 @@
 # ADR-0003: Compression presets: lossless by default, never larger, originals untouched
 
 ## Status
-Accepted
+Accepted; ADR-0015 adds a fourth lossy PDF preset, Screen (quality 65, 100 DPI).
 
 ## Date
 2026-10-03

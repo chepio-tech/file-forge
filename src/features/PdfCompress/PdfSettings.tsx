@@ -20,7 +20,7 @@ interface PdfSettingsProps {
   onOptions: (options: PdfOptions) => void;
 }
 
-const PRESET_IDS: PresetId[] = ["lossless", "balanced", "maximum", "custom"];
+const PRESET_IDS: PresetId[] = ["lossless", "balanced", "maximum", "screen", "custom"];
 
 function PdfSettings({ preset, options, disabled, onPreset, onCustom, onOptions }: PdfSettingsProps) {
   const lossy = options.images ?? PRESETS.balanced.images!;
@@ -60,7 +60,10 @@ function PdfSettings({ preset, options, disabled, onPreset, onCustom, onOptions 
           />
         </div>
       </div>
-      <p className="pdf-settings__hint">{hint}</p>
+      <p className="pdf-settings__hint">
+        {hint}
+        {preset === "screen" && ` ${messages.pdf.screenHint}`}
+      </p>
       <div className="pdf-settings__removal">
         <Checkbox
           label={messages.pdf.stripMetadata}

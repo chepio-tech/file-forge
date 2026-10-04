@@ -275,6 +275,26 @@ describe("PdfCompress compression", () => {
     expect(screen.getByRole("button", { name: "Compress 2 files" })).toBeEnabled();
   });
 
+  it("offers a Screen preset for the smallest files and says what it costs", async () => {
+    await withFiles(file(1, "a.pdf"));
+
+    await userEvent.click(screen.getByRole("radio", { name: "Screen" }));
+    expect(screen.getByLabelText("JPEG quality")).toHaveValue(65);
+    expect(screen.getByLabelText("Max DPI")).toHaveValue(100);
+    expect(screen.getByText(/JPEG 2000 images saved as JPEG at quality 65/)).toBeInTheDocument();
+    expect(screen.getByText(/For reading on screen/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    expect(api().api.compressPdf).toHaveBeenLastCalledWith(
+      1,
+      { images: { jpegQuality: 65, maxDpi: 100 }, stripMetadata: false, stripEditingData: false },
+      expect.any(Function),
+    );
+
+    await userEvent.click(screen.getByRole("radio", { name: "Maximum" }));
+    expect(screen.queryByText(/For reading on screen/)).not.toBeInTheDocument();
+  });
+
   it("switches to Custom when a number is edited and flags results as outdated", async () => {
     await withFiles(file(1, "a.pdf"));
     await userEvent.click(screen.getByRole("radio", { name: "Maximum" }));
