@@ -20,6 +20,7 @@ try {
     }
     $bitmap.Save((Join-Path $testDirectory "checker.bmp"), [System.Drawing.Imaging.ImageFormat]::Bmp)
 } finally { $bitmap.Dispose() }
+if (!(Test-Path (Join-Path $testDirectory "checker.bmp"))) { throw "Checker bitmap was not written" }
 
 foreach ($mode in @("stock", "smooth")) {
     $arguments = @("/V2", "/WX", "/DREPOSITORY_ROOT=$repositoryRoot", "/DTEST_DIRECTORY=$testDirectory", "/DTEST_MODE=$mode")

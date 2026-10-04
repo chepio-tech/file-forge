@@ -3,13 +3,13 @@ ManifestDPIAware true
 ManifestDPIAwareness PerMonitorV2
 RequestExecutionLevel user
 Name "FileForge installer DPI test"
-OutFile "${TEST_DIRECTORY}/${TEST_MODE}.exe"
+OutFile "${TEST_DIRECTORY}\${TEST_MODE}.exe"
 
 ; Core
 !include MUI2.nsh
 ; Components
 !ifdef SMOOTH
-  !include "${REPOSITORY_ROOT}/src-tauri/branding/installer-branding/installerBranding.nsh"
+  !include "${REPOSITORY_ROOT}\src-tauri\branding\installer-branding\installerBranding.nsh"
 !endif
 
 !insertmacro MUI_PAGE_WELCOME
@@ -26,8 +26,8 @@ Var Round
 
 Function .onInit
   InitPluginsDir
-  File /oname=$PLUGINSDIR\checker.bmp "${TEST_DIRECTORY}/checker.bmp"
-  FileOpen $Report "${TEST_DIRECTORY}/${TEST_MODE}.txt" w
+  File /oname=$PLUGINSDIR\checker.bmp "${TEST_DIRECTORY}\checker.bmp"
+  FileOpen $Report "${TEST_DIRECTORY}\${TEST_MODE}.txt" w
   StrCpy $Round 0
   System::Call 'KERNEL32::GetCurrentProcess()p.r0'
   System::Call 'USER32::GetGuiResources(pr0,i0)i.r1'
