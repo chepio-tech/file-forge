@@ -43,3 +43,23 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+
+  installer-dpi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Test native installer bitmap filtering
+        shell: pwsh
+        run: |
+          # Use the same NSIS version as Tauri bundling; check its published SHA-256 before execution.
+          $archive = Join-Path $env:RUNNER_TEMP "nsis-3.11.zip"
+          Invoke-WebRequest "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip" -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne "c7d27f780ddb6cffb4730138cd1591e841f4b7edb155856901cdf5f214394fa1") {
+            throw "NSIS archive checksum mismatch"
+          }
+          $directory = Join-Path $env:RUNNER_TEMP "nsis-dpi-compiler"
+          Expand-Archive $archive -DestinationPath $directory
+          # The archive also holds Bin\makensis.exe; Tauri runs the top-level launcher, which starts it.
+          $compiler = Join-Path $directory "nsis-3.11\makensis.exe"
+          if (!(Test-Path $compiler -PathType Leaf)) { throw "NSIS compiler missing: $compiler" }
+          ./.github/scripts/installerDpiTest/installerDpiTest.ps1 -Makensis $compiler

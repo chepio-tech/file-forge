@@ -19,7 +19,10 @@ NSIS's stock installer icon. `docs/installerBranding.test.ts` checks the configu
 BMP files are uncompressed 24-bit RGB and rendered directly from SVG at 2× resolution, preserving the native
 layout proportions while providing detail at up to 200% Windows scaling. NSIS uses `AspectFitHeight` for header,
 uninstaller header and welcome/finish images so custom DPI/font settings do not stretch the artwork out of
-proportion; MSI scales its bitmap to the native control. The Windows wordmarks are 120 layout pixels wide;
+proportion. The NSIS include then resamples each image with GDI HALFTONE to its physical control size at page
+creation, preventing unfiltered downsampling at 150%. Exact-size images bypass resampling, and the original
+bitmap remains available if a GDI call fails. The native Windows regression and cleanup test is described in
+`docs/architecture/deployment.md`. MSI scales its bitmap to the native control. The Windows wordmarks are 120 layout pixels wide;
 sidebar signatures sit 10 pixels higher than the original artwork. Remove the tagline path from the embedded
 vector rather than covering it with a rectangle, which can leave a dotted fringe after rasterization.
 The DMG background is a losslessly
