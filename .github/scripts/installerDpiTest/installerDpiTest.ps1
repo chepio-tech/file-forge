@@ -34,6 +34,9 @@ foreach ($mode in @("stock", "smooth")) {
 
 $stock = Get-Content (Join-Path $testDirectory "stock.txt")
 $smooth = Get-Content (Join-Path $testDirectory "smooth.txt")
+# Each line: control size, bitmap width, bitmap height, intermediate (gray) pixels; then the GDI object delta.
+Write-Output "stock: $($stock -join ' | ')"
+Write-Output "smooth: $($smooth -join ' | ')"
 if ($stock.Count -ne 4 -or $smooth.Count -ne 4) { throw "Incomplete DPI reports" }
 for ($index = 0; $index -lt 3; $index++) {
     $before = $stock[$index].Split(',') | ForEach-Object { [int]$_ }

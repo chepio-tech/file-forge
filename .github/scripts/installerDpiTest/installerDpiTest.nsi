@@ -51,9 +51,10 @@ Function .onInit
         StrCpy $6 0
         column:
           System::Call 'GDI32::GetPixel(pr2,ir6,ir5)i.r7'
-          ${If} $7 != 0
-          ${AndIf} $7 != 0xFFFFFF
-          ${AndIf} $7 != -1
+          ; Integer comparisons: LogicLib's != compares strings, and GetPixel returns decimal (white = 16777215).
+          ${If} $7 <> 0
+          ${AndIf} $7 <> 0xFFFFFF
+          ${AndIf} $7 <> -1
             IntOp $GrayPixels $GrayPixels + 1
           ${EndIf}
           IntOp $6 $6 + 1

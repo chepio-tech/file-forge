@@ -38,8 +38,8 @@
       ${AndIf} $R4 <> 0
       ${AndIf} $4 > 0
       ${AndIf} $5 > 0
-        ${If} $2 != $4
-        ${OrIf} $3 != $5
+        ${If} $2 <> $4
+        ${OrIf} $3 <> $5
           System::Call 'GDI32::CreateCompatibleDC(p0)p.r6'
           System::Call 'GDI32::CreateCompatibleDC(p0)p.r7'
           ; BITMAPINFOHEADER: uncompressed RGB, no alpha that STM_SETIMAGE could copy implicitly.
