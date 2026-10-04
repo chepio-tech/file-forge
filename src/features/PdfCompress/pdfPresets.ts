@@ -8,13 +8,14 @@ import type { PdfOptions } from "@/services/fileforgeApi";
 export const JPEG_QUALITY = { min: 30, max: 95 } as const;
 export const MAX_DPI = { min: 72, max: 600 } as const;
 
-export type PresetId = "lossless" | "balanced" | "maximum" | "custom";
+export type PresetId = "lossless" | "balanced" | "maximum" | "screen" | "custom";
 
 /** Removal options are off in every preset; choosing a preset keeps the user's removal choices. */
 export const PRESETS: Record<Exclude<PresetId, "custom">, PdfOptions> = {
   lossless: { images: null, stripMetadata: false, stripEditingData: false },
   balanced: { images: { jpegQuality: 85, maxDpi: 200 }, stripMetadata: false, stripEditingData: false },
   maximum: { images: { jpegQuality: 70, maxDpi: 150 }, stripMetadata: false, stripEditingData: false },
+  screen: { images: { jpegQuality: 65, maxDpi: 100 }, stripMetadata: false, stripEditingData: false },
 };
 
 export const DEFAULT_PRESET = "lossless" satisfies PresetId;

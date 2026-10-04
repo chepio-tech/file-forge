@@ -18,6 +18,10 @@ fn main() {
             "maximum",
             PdfOptions { images: Some(ImageOptions { jpeg_quality: 70, max_dpi: Some(150) }), ..PdfOptions::LOSSLESS },
         ),
+        (
+            "screen",
+            PdfOptions { images: Some(ImageOptions { jpeg_quality: 65, max_dpi: Some(100) }), ..PdfOptions::LOSSLESS },
+        ),
     ];
     for path in std::env::args().skip(1) {
         let Ok(input) = std::fs::read(&path) else {
