@@ -45,6 +45,11 @@ Flate photograph conversion (ADR-0016) validates predictor layout before invokin
 unsupported/ambiguous parameters are skipped. Its screen-content scan allocates only a fixed histogram, inspects
 already bounded pixels and introduces no model, downloads or additional threads.
 
+CFF font programs are parsed by the engine's own code (`pdf::cff`, ADR-0018): every read is bounds-checked, the
+charstring scan is capped at 64 M interpreted bytes and 10 nested calls, and the call is wrapped in `catch_unwind`.
+A rewritten font is used only after parsing it again proves that every glyph executes the same bytes.
+Corrupted fonts are fuzzed in the `pdf::cff` unit tests.
+
 ## Temp results
 Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
 the next start. Staging files are created exclusively, flushed and closed before publication, and removed on failure.
