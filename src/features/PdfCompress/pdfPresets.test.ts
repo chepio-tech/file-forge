@@ -30,9 +30,21 @@ describe("pdfPresets", () => {
       expect([preset.stripMetadata, preset.stripEditingData]).toEqual([false, false]);
     }
     expect(optionsKey({ ...PRESETS.lossless, stripMetadata: true })).toBe("lossless+metadata");
-    expect(optionsKey({ ...PRESETS.maximum, stripEditingData: true })).toBe("70/150+editing");
+    expect(optionsKey({ ...PRESETS.maximum, stripEditingData: true })).toBe("70/150+photos+editing");
     expect(optionsKey({ ...PRESETS.lossless, stripMetadata: true, stripEditingData: true })).toBe(
       "lossless+metadata+editing",
     );
+  });
+
+  it("enables Flate photo conversion only in Maximum and distinguishes it from the same numeric settings", () => {
+    expect(PRESETS.maximum.images?.compressFlatePhotos).toBe(true);
+    for (const preset of [PRESETS.lossless, PRESETS.balanced, PRESETS.screen]) {
+      expect(preset.images?.compressFlatePhotos ?? false).toBe(false);
+    }
+    const images = PRESETS.maximum.images!;
+    const disabled = { ...PRESETS.maximum, images: { ...images, compressFlatePhotos: false } };
+    const legacy = { ...PRESETS.maximum, images: { jpegQuality: images.jpegQuality, maxDpi: images.maxDpi } };
+    expect(optionsKey(disabled)).toBe(optionsKey(legacy));
+    expect(optionsKey(PRESETS.maximum)).not.toBe(optionsKey(disabled));
   });
 });

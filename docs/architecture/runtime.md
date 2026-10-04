@@ -6,10 +6,14 @@
    checks that the opened file is regular, checks its size, and reads at most the input limit plus one byte.
    Files that grow beyond the limit during the read are refused too.
 3. `fileforge_core::pdf::compress_controlled` (in `spawn_blocking`): load → refuse encrypted/signed → (on request)
-   remove metadata, thumbnails and editing data → merge duplicate streams → drop unreachable objects → image pass (lossy presets, ≤ 4 images in parallel; JPEG and JPEG 2000 → JPEG, raw → downsampled Deflate) → re-deflate →
+   remove metadata, thumbnails and editing data → merge duplicate streams → drop unreachable objects → image pass
+   (lossy presets, ≤ 4 images in parallel; JPEG and JPEG 2000 → JPEG, raw → downsampled Deflate; suitable Flate
+   photographs → JPEG with `compressFlatePhotos`, Maximum, ADR-0016) → re-deflate →
    save (object + cross-reference streams, or classic for PDF/A-1) → reload and check page count → keep only if
    smaller. Each stage reports progress to the UI through the call's channel.
 4. Shell writes the result atomically to the temp store and returns the `PdfReport`.
+
+Flate screen-content checks run before resizing, and the JPEG must beat equivalent Deflate (ADR-0016).
 
 ## Cancellation (ADR-0011)
 `compress_pdf` takes a ticket from the shell's cancellation counter when it starts, before waiting for the work
@@ -79,6 +83,18 @@ JPEG decoding moved to `jpeg-decoder` (ADR-0015). On a generated 4-page PDF repe
 (Balanced) and 0.76 s (Maximum), against 0.98 s and 0.66 s before.
 
 Reproduce: `cargo run --release -p fileforge-core --example measure_pdf -- <files>`.
+
+Generated Flate photo/screen fixtures, release build, 2026-10-04 (ADR-0016; not a real-world corpus):
+| Input | Maximum before | Maximum with photo conversion | Time after |
+|---|---|---|---|
+| RGB photograph, 1024×768 at 150 DPI, 2,098.0 KB | 2,094.3 KB (−0.2%) | 60.3 KB (−97.1%), same resolution | 62 ms |
+| Gray photograph, 1024×768 at 150 DPI, 654.5 KB | 654.4 KB (−0.0%) | 78.4 KB (−88.0%), same resolution | 25 ms |
+| RGB photograph, 1600×1200 at 300 DPI, 5,119.8 KB | 1,241.2 KB (−75.8%) | 23.5 KB (−99.5%), 800×600 pixels | 88 ms |
+| Photo with flat/sharp UI panels, 1024×768 at 150 DPI, 1,662.3 KB | 1,661.3 KB | 1,661.3 KB, identical pixels | 190 ms |
+
+Fixtures combine deterministic noise and smooth sinusoidal gradients; the screen fixture adds flat panels and
+sharp strokes. These especially compressible generated images illustrate the encoding gap and conservative
+veto, rather than estimate savings on ordinary photographs. No real photo/screenshot corpus was measured.
 
 Cancel latency (generated files, release build, cancel requested at 10–90% of the run, 2026-10-03):
 | File | Full run | Cancel took effect after |

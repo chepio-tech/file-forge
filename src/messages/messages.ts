@@ -52,6 +52,8 @@ const messages = {
         ? `JPEG and JPEG 2000 images saved as JPEG at quality ${quality}. Image resolution is kept.`
         : `JPEG and JPEG 2000 images saved as JPEG at quality ${quality}. Images shown above ${maxDpi} DPI are downsampled.`,
     screenHint: "For reading on screen: printed or zoomed-in pages look softer.",
+    flatePhotosHint:
+      "Losslessly stored photos may also become JPEG with at least 20% savings. Detected screenshots and line art keep lossless image encoding.",
     stripMetadata: "Remove metadata and thumbnails",
     stripMetadataHint: "Author, software, dates, XMP and page thumbnails. PDF/A, PDF/UA and PDF/X keep what they require.",
     stripEditingData: "Remove editing data",

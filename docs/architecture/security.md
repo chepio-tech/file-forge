@@ -35,6 +35,10 @@ Image decoders read attacker-controlled bytes, so they are memory-safe Rust (ADR
 checked against the dictionary and the sample limit before decoding, and a panic inside that decoder only skips
 the image. Broken codestreams are fuzzed in the `pdf::jpx` unit tests.
 
+Flate photograph conversion (ADR-0016) validates predictor layout before invoking the bounded stream decoder;
+unsupported/ambiguous parameters are skipped. Its screen-content scan allocates only a fixed histogram, inspects
+already bounded pixels and introduces no model, downloads or additional threads.
+
 ## Temp results
 Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
 the next start. Staging files are created exclusively, flushed and closed before publication, and removed on failure.

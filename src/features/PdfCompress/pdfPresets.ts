@@ -14,7 +14,11 @@ export type PresetId = "lossless" | "balanced" | "maximum" | "screen" | "custom"
 export const PRESETS: Record<Exclude<PresetId, "custom">, PdfOptions> = {
   lossless: { images: null, stripMetadata: false, stripEditingData: false },
   balanced: { images: { jpegQuality: 85, maxDpi: 200 }, stripMetadata: false, stripEditingData: false },
-  maximum: { images: { jpegQuality: 70, maxDpi: 150 }, stripMetadata: false, stripEditingData: false },
+  maximum: {
+    images: { jpegQuality: 70, maxDpi: 150, compressFlatePhotos: true },
+    stripMetadata: false,
+    stripEditingData: false,
+  },
   screen: { images: { jpegQuality: 65, maxDpi: 100 }, stripMetadata: false, stripEditingData: false },
 };
 
@@ -27,7 +31,12 @@ export function clamp(value: number, range: { min: number; max: number }): numbe
 /** Stable key for "were these results produced with the current settings?". */
 export function optionsKey(options: PdfOptions): string {
   const images = options.images ? `${options.images.jpegQuality}/${options.images.maxDpi ?? "keep"}` : "lossless";
-  return [images, options.stripMetadata ? "metadata" : "", options.stripEditingData ? "editing" : ""]
+  return [
+    images,
+    options.images?.compressFlatePhotos ? "photos" : "",
+    options.stripMetadata ? "metadata" : "",
+    options.stripEditingData ? "editing" : "",
+  ]
     .filter(Boolean)
     .join("+");
 }

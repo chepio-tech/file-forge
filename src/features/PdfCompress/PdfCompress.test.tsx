@@ -295,6 +295,24 @@ describe("PdfCompress compression", () => {
     expect(screen.queryByText(/For reading on screen/)).not.toBeInTheDocument();
   });
 
+  it("explains Maximum photo conversion, sends its option and removes it on other presets", async () => {
+    await withFiles(file(1, "a.pdf"));
+    await userEvent.click(screen.getByRole("radio", { name: "Maximum" }));
+    expect(screen.getByText(/Losslessly stored photos may also become JPEG/)).toBeInTheDocument();
+    expect(screen.getByText(/at least 20% savings/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
+    expect(api().api.compressPdf).toHaveBeenLastCalledWith(
+      1,
+      { images: { jpegQuality: 70, maxDpi: 150, compressFlatePhotos: true }, stripMetadata: false, stripEditingData: false },
+      expect.any(Function),
+    );
+    await screen.findByText("→ 400 kB");
+    for (const preset of ["Balanced", "Screen", "Lossless"]) {
+      await userEvent.click(screen.getByRole("radio", { name: preset }));
+      expect(screen.queryByText(/Losslessly stored photos may also become JPEG/)).not.toBeInTheDocument();
+    }
+  });
+
   it("switches to Custom when a number is edited and flags results as outdated", async () => {
     await withFiles(file(1, "a.pdf"));
     await userEvent.click(screen.getByRole("radio", { name: "Maximum" }));
@@ -307,12 +325,13 @@ describe("PdfCompress compression", () => {
 
     expect(screen.getByRole("radio", { name: "Custom" })).toBeChecked();
     expect(quality).toHaveValue(95);
+    expect(screen.getByText(/Losslessly stored photos may also become JPEG/)).toBeInTheDocument();
     expect(screen.getByText(/Settings changed since the last run/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Compress 1 file" }));
     expect(api().api.compressPdf).toHaveBeenLastCalledWith(
       1,
-      { images: { jpegQuality: 95, maxDpi: 150 }, stripMetadata: false, stripEditingData: false },
+      { images: { jpegQuality: 95, maxDpi: 150, compressFlatePhotos: true }, stripMetadata: false, stripEditingData: false },
       expect.any(Function),
     );
   });

@@ -15,7 +15,9 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 - `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`.
 - `remove_file` — forget a registered file and its unsaved result.
 - `compress_pdf(id, options, onProgress)` → `PdfReport`. Options:
-  `{ images: null | { jpegQuality, maxDpi | null }, stripMetadata, stripEditingData }`; `images: null` is lossless,
+  `{ images: null | { jpegQuality, maxDpi | null, compressFlatePhotos }, stripMetadata, stripEditingData }`;
+  `compressFlatePhotos` defaults to false when omitted and enables the conservative Flate photograph conversion
+  defined in ADR-0016. Maximum enables it; Custom retains it when editing Maximum's numbers. `images: null` is lossless,
   and the two removal flags (default `false` when omitted) work with any preset (ADR-0012). Ranges are defined in
   `crates/fileforge-core/src/pdf/options.rs` and validated there; the UI mirrors them in
   `src/features/PdfCompress/pdfPresets.ts`. The report adds `metadataRemoved`, `metadataKeptForStandard`,

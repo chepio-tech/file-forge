@@ -16,6 +16,7 @@ mod limits;
 mod metadata;
 mod objects;
 mod options;
+mod photos;
 mod placement;
 mod streams;
 
