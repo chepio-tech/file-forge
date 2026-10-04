@@ -45,12 +45,13 @@ const messages = {
   },
   pdf: {
     settings: "Compression",
-    presets: { lossless: "Lossless", balanced: "Balanced", maximum: "Maximum", custom: "Custom" },
+    presets: { lossless: "Lossless", balanced: "Balanced", maximum: "Maximum", screen: "Screen", custom: "Custom" },
     losslessHint: "Rewrites the file structure only. Text, vectors and image pixels stay bit-identical.",
     lossyHint: (quality: number, maxDpi: number | null) =>
       maxDpi === null
-        ? `JPEG images re-encoded at quality ${quality}. Image resolution is kept.`
-        : `JPEG images re-encoded at quality ${quality}. Images shown above ${maxDpi} DPI are downsampled.`,
+        ? `JPEG and JPEG 2000 images saved as JPEG at quality ${quality}. Image resolution is kept.`
+        : `JPEG and JPEG 2000 images saved as JPEG at quality ${quality}. Images shown above ${maxDpi} DPI are downsampled.`,
+    screenHint: "For reading on screen: printed or zoomed-in pages look softer.",
     stripMetadata: "Remove metadata and thumbnails",
     stripMetadataHint: "Author, software, dates, XMP and page thumbnails. PDF/A, PDF/UA and PDF/X keep what they require.",
     stripEditingData: "Remove editing data",

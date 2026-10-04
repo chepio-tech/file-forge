@@ -9,9 +9,16 @@ pub(crate) struct Limits {
     pub max_stream_bytes: usize,
     /// Images with more pixels than this are left untouched.
     pub max_image_pixels: u64,
+    /// JPEG 2000 images with more samples (pixels × channels) than this are left untouched. The decoder keeps
+    /// floating-point coefficients: measured ~8 bytes per sample at peak, so 100 M samples ≈ 0.8 GB per image.
+    pub max_jpx_samples: u64,
 }
 
 impl Limits {
-    pub const DEFAULT: Self =
-        Self { max_input_bytes: MAX_INPUT_BYTES, max_stream_bytes: 512 << 20, max_image_pixels: 150_000_000 };
+    pub const DEFAULT: Self = Self {
+        max_input_bytes: MAX_INPUT_BYTES,
+        max_stream_bytes: 512 << 20,
+        max_image_pixels: 150_000_000,
+        max_jpx_samples: 100_000_000,
+    };
 }

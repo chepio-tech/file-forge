@@ -1,16 +1,19 @@
-//! Lossy image pass (Balanced / Maximum presets). Every change is conservative: unusual encodings are skipped, and
-//! a new encoding is kept only if it is clearly smaller than the original.
+//! Lossy image pass (Balanced / Maximum / Screen presets). Every change is conservative: unusual encodings are skipped,
+//! and a new encoding is kept only if it is clearly smaller than the original. JPEG and JPEG 2000 images become JPEG;
+//! raw images keep lossless Deflate and only lose resolution.
 
 // Core
 use std::collections::HashMap;
 
 use image::imageops::FilterType;
-use image::{DynamicImage, GrayImage, ImageFormat, RgbImage};
+use image::{DynamicImage, GrayImage, RgbImage};
+use jpeg_decoder::{Decoder, PixelFormat};
 use jpeg_encoder::{ColorType, Encoder};
 use lopdf::{Document, Object, ObjectId, Stream};
 use rayon::prelude::*;
 // Domain
 use super::control::{Control, Counter, Stage};
+use super::jpx;
 use super::limits::Limits;
 use super::objects::{dict_integer, dict_name, filters, resolve};
 use super::options::ImageOptions;
@@ -20,10 +23,10 @@ use super::streams::deflate;
 /// Downsample only when the image is more than 15% above the target resolution; smaller gains are not worth a
 /// resample.
 const DOWNSAMPLE_THRESHOLD: f64 = 1.15;
-/// A re-encoded JPEG must be at least 2% smaller to replace the original.
-const MIN_JPEG_GAIN: f64 = 0.98;
-/// Images decoded at once. Each holds its full bitmap (up to ~450 MB at the pixel limit), so this bounds peak memory;
-/// measured: four 36 MP photos take ~1 s each on one core.
+/// A lossy original (JPEG or JPEG 2000) is replaced only by a JPEG at least 2% smaller.
+const MIN_LOSSY_GAIN: f64 = 0.98;
+/// Images decoded at once. Each holds its full bitmap (up to ~450 MB at the pixel limit, ~0.8 GB while decoding JPEG
+/// 2000 at its sample limit), so this bounds peak memory; measured: four 36 MP photos take ~1 s each on one core.
 const MAX_PARALLEL_IMAGES: usize = 4;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -122,6 +125,9 @@ pub(crate) fn optimize_images(
         let Some(Object::Stream(stream)) = doc.objects.get_mut(&replacement.id) else { continue };
         stream.dict.set("Filter", Object::Name(replacement.filter.as_bytes().to_vec()));
         stream.dict.remove(b"DecodeParms");
+        // JPEG 2000 may omit the bit depth and carry `SMaskInData 0`; neither belongs to the new encoding.
+        stream.dict.remove(b"SMaskInData");
+        stream.dict.set("BitsPerComponent", 8);
         stream.dict.set("Width", i64::from(replacement.size.0));
         stream.dict.set("Height", i64::from(replacement.size.1));
         stream.set_content(replacement.content);
@@ -144,7 +150,17 @@ fn candidate(
     let is_mask = matches!(dict.get(b"ImageMask").ok().and_then(|v| resolve(doc, v)), Some(Object::Boolean(true)));
     // Color-key masks compare exact sample values, which lossy re-encoding would break.
     let color_key_mask = matches!(dict.get(b"Mask").ok().and_then(|v| resolve(doc, v)), Some(Object::Array(_)));
-    if is_mask || color_key_mask || dict_integer(doc, dict, b"BitsPerComponent") != Some(8) {
+    let is_jpx = filters(stream).is_some_and(|chain| chain == [b"JPXDecode"]);
+    // JPEG 2000 takes its bit depth from the codestream, so the dictionary may omit it.
+    let bits_ok = match dict_integer(doc, dict, b"BitsPerComponent") {
+        Some(bits) => bits == 8,
+        None => is_jpx,
+    };
+    // PDF ignores `Decode` for JPEG 2000 but would apply it to the JPEG replacing it; `SMaskInData` makes the
+    // codestream's alpha channel the image's soft mask.
+    let jpx_extras =
+        is_jpx && (dict.has(b"Decode") || dict_integer(doc, dict, b"SMaskInData").is_some_and(|value| value != 0));
+    if is_mask || color_key_mask || !bits_ok || jpx_extras {
         return None;
     }
     let width = u32::try_from(dict_integer(doc, dict, b"Width")?).ok().filter(|w| *w > 0)?;
@@ -207,9 +223,14 @@ pub(crate) fn target_size(width: u32, height: u32, display: Option<DisplaySize>,
 fn encode(stream: &Stream, candidate: &Candidate, options: &ImageOptions, limits: &Limits) -> Option<Replacement> {
     let chain = filters(stream)?;
     let (content, filter, size) = match chain.as_slice() {
-        [b"DCTDecode"] if !stream.dict.has(b"DecodeParms") => {
-            let (bytes, size) = reencode_jpeg(&stream.content, candidate, options.jpeg_quality)?;
-            let limit = (stream.content.len() as f64 * MIN_JPEG_GAIN) as usize;
+        [filter @ (b"DCTDecode" | b"JPXDecode")] if !stream.dict.has(b"DecodeParms") => {
+            let image = if *filter == b"DCTDecode" {
+                decode_jpeg(&stream.content, candidate)?
+            } else {
+                decode_jpx(&stream.content, candidate, limits)?
+            };
+            let (bytes, size) = encode_jpeg(image, candidate, options.jpeg_quality)?;
+            let limit = (stream.content.len() as f64 * MIN_LOSSY_GAIN) as usize;
             (bytes.len() < limit).then_some((bytes, "DCTDecode", size))?
         }
         // Raw pixels are already lossless; only resolution can be reduced.
@@ -228,16 +249,31 @@ fn encode(stream: &Stream, candidate: &Candidate, options: &ImageOptions, limits
     })
 }
 
-fn reencode_jpeg(jpeg: &[u8], candidate: &Candidate, quality: u8) -> Option<(Vec<u8>, (u32, u32))> {
-    let decoded = image::load_from_memory_with_format(jpeg, ImageFormat::Jpeg).ok()?;
+/// The JPEG's pixels, if their layout matches the image dictionary. The header is checked before any pixel buffer
+/// exists.
+fn decode_jpeg(jpeg: &[u8], candidate: &Candidate) -> Option<DynamicImage> {
+    let mut decoder = Decoder::new(jpeg);
+    decoder.read_info().ok()?;
+    let info = decoder.info()?;
     let matches_dict = matches!(
-        (candidate.pixels, &decoded),
-        (Pixels::Gray, DynamicImage::ImageLuma8(_)) | (Pixels::Rgb, DynamicImage::ImageRgb8(_))
+        (candidate.pixels, info.pixel_format),
+        (Pixels::Gray, PixelFormat::L8) | (Pixels::Rgb, PixelFormat::RGB24)
     );
-    if !matches_dict || (decoded.width(), decoded.height()) != (candidate.width, candidate.height) {
+    if !matches_dict || (u32::from(info.width), u32::from(info.height)) != (candidate.width, candidate.height) {
         return None;
     }
-    let image = resize(decoded, candidate.target);
+    bitmap(candidate, decoder.decode().ok()?)
+}
+
+fn decode_jpx(jpx: &[u8], candidate: &Candidate, limits: &Limits) -> Option<DynamicImage> {
+    let components = candidate.pixels.components();
+    let samples = jpx::decode(jpx, candidate.width, candidate.height, components, limits.max_jpx_samples)?;
+    bitmap(candidate, samples)
+}
+
+/// Downsamples to the candidate's target, if any, and encodes as JPEG.
+fn encode_jpeg(image: DynamicImage, candidate: &Candidate, quality: u8) -> Option<(Vec<u8>, (u32, u32))> {
+    let image = resize(image, candidate.target);
     let size = (image.width(), image.height());
     let (data, color) = match candidate.pixels {
         Pixels::Gray => (image.into_luma8().into_raw(), ColorType::Luma),
@@ -252,21 +288,25 @@ fn reencode_jpeg(jpeg: &[u8], candidate: &Candidate, quality: u8) -> Option<(Vec
 
 fn downsample_raw(stream: &Stream, candidate: &Candidate, limits: &Limits) -> Option<(Vec<u8>, (u32, u32))> {
     let raw = stream.get_plain_content_with_limit(limits.max_stream_bytes).ok()?;
-    let expected = candidate.width as usize * candidate.height as usize * candidate.pixels.components();
-    if raw.len() != expected {
-        return None;
-    }
-    let image = match candidate.pixels {
-        Pixels::Gray => DynamicImage::ImageLuma8(GrayImage::from_raw(candidate.width, candidate.height, raw)?),
-        Pixels::Rgb => DynamicImage::ImageRgb8(RgbImage::from_raw(candidate.width, candidate.height, raw)?),
-    };
-    let image = resize(image, candidate.target);
+    let image = resize(bitmap(candidate, raw)?, candidate.target);
     let size = (image.width(), image.height());
     let data = match candidate.pixels {
         Pixels::Gray => image.into_luma8().into_raw(),
         Pixels::Rgb => image.into_rgb8().into_raw(),
     };
     Some((deflate(&data)?, size))
+}
+
+/// Interleaved 8-bit samples as an image, if their count matches the candidate's size and layout.
+fn bitmap(candidate: &Candidate, samples: Vec<u8>) -> Option<DynamicImage> {
+    let (width, height) = (candidate.width, candidate.height);
+    if samples.len() != width as usize * height as usize * candidate.pixels.components() {
+        return None;
+    }
+    match candidate.pixels {
+        Pixels::Gray => GrayImage::from_raw(width, height, samples).map(DynamicImage::ImageLuma8),
+        Pixels::Rgb => RgbImage::from_raw(width, height, samples).map(DynamicImage::ImageRgb8),
+    }
 }
 
 fn resize(image: DynamicImage, target: Option<(u32, u32)>) -> DynamicImage {
