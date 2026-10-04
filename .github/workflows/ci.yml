@@ -59,6 +59,7 @@ jobs:
           }
           $directory = Join-Path $env:RUNNER_TEMP "nsis-dpi-compiler"
           Expand-Archive $archive -DestinationPath $directory
-          $compilers = @(Get-ChildItem $directory -Filter makensis.exe -File -Recurse)
-          if ($compilers.Count -ne 1) { throw "Expected one NSIS compiler" }
-          ./.github/scripts/installerDpiTest/installerDpiTest.ps1 -Makensis $compilers[0].FullName
+          # The archive also holds Bin\makensis.exe; Tauri runs the top-level launcher, which starts it.
+          $compiler = Join-Path $directory "nsis-3.11\makensis.exe"
+          if (!(Test-Path $compiler -PathType Leaf)) { throw "NSIS compiler missing: $compiler" }
+          ./.github/scripts/installerDpiTest/installerDpiTest.ps1 -Makensis $compiler
