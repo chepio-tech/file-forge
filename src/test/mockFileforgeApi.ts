@@ -24,6 +24,7 @@ export function createApiMock() {
       files: [],
       skipped: [],
     })),
+    setDropKinds: vi.fn(async (_kinds: string[]) => {}),
     removeFile: vi.fn(async (_id: number) => {}),
     compressPdf: vi.fn<
       (id: number, options: PdfOptions, onProgress?: (progress: PdfProgress) => void) => Promise<PdfReport>

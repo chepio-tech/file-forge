@@ -22,7 +22,8 @@ export interface FileIntake {
 
 /**
  * The list of input files of one tool: files come from the native dialog or from drops on the window (only while
- * the tool is `active`), are filtered to the kinds the tool accepts, and de-duplicated by id.
+ * the tool is `active`; dropped folders are searched for its kinds), are filtered to the kinds the tool accepts, and
+ * de-duplicated by id.
  */
 export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake {
   const [files, setFiles] = useState<FileInfo[]>([]);
@@ -44,12 +45,25 @@ export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake
         lines.push(messages.intake.wrongKind(tool.formats, listNames(rejected.map((file) => file.name))));
       }
       if (outcome.skipped.length > 0) lines.push(messages.intake.skipped(listNames(outcome.skipped)));
+      const folders = outcome.folders;
+      if (folders) {
+        if (folders.added === 0 && !folders.truncated) {
+          lines.push(messages.intake.noneInFolders(tool.formats, folders.folders));
+        }
+        if (folders.ignored > 0) lines.push(messages.intake.ignoredInFolders(folders.ignored, folders.folders));
+        if (folders.truncated) lines.push(messages.intake.foldersTruncated(folders.folders));
+      }
       setNotice(lines);
     },
     [tool],
   );
 
   const onDropped = useEffectEvent(accept);
+
+  useEffect(() => {
+    // Without it dropped folders add nothing; directly dropped files still arrive, so a failure stays quiet.
+    if (active) fileforgeApi.setDropKinds(tool.accepts).catch(() => {});
+  }, [active, tool]);
 
   useEffect(() => {
     if (!active) return;

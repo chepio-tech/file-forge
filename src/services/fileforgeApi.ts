@@ -20,10 +20,24 @@ export interface FileInfo {
   kind: FileKind;
 }
 
+/** What searching the dropped folders of one drop did (ADR-0017). */
+export interface FolderScan {
+  /** Folders dropped, not counting their subfolders. */
+  folders: number;
+  /** Files found in them and registered. */
+  added: number;
+  /** Files and app/document packages of kinds the active tool does not accept. */
+  ignored: number;
+  /** A limit (depth, entries or files per drop) stopped the search, so some files were not added. */
+  truncated: boolean;
+}
+
 export interface RegisterOutcome {
   files: FileInfo[];
-  /** Names of dropped or picked entries that are not readable regular files (folders, broken links). */
+  /** Names of entries that are not readable regular files (broken links, unreadable folders, packages). */
   skipped: string[];
+  /** Present only when the drop contained folders. */
+  folders?: FolderScan;
 }
 
 export interface ImageOptions {
@@ -113,6 +127,9 @@ const fileforgeApi = {
   pickFiles: (kinds: FileKind[], filterName: string) =>
     invoke<RegisterOutcome>("pick_files", { kinds, filterName }),
 
+  /** Kinds that dropped folders contribute; the shown tool sets them. Directly dropped files are not filtered. */
+  setDropKinds: (kinds: FileKind[]) => invoke<void>("set_drop_kinds", { kinds }),
+
   /** Forgets the file and its unsaved result. */
   removeFile: (id: FileId) => invoke<void>("remove_file", { id }),
 
@@ -146,7 +163,7 @@ const fileforgeApi = {
    */
   installUpdate: (discardUnsaved: boolean) => invoke<void>("install_update", { discardUnsaved }),
 
-  /** Files dropped on the window, already registered by Rust. */
+  /** Files dropped on the window, already registered by Rust; dropped folders arrive expanded. */
   onFilesAdded: (handler: (outcome: RegisterOutcome) => void): Promise<UnlistenFn> =>
     listen<RegisterOutcome>(FILES_ADDED_EVENT, (event) => handler(event.payload)),
 
