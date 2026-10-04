@@ -23,10 +23,11 @@ NSIS's aspect-fit helper changes the control size without filtering the bitmap. 
 then resamples the header and welcome/finish bitmaps with GDI HALFTONE to the control's physical pixel size at
 page creation. This prevents aliasing at fractional scales such as 150%; an exact-size source stays unchanged.
 The result is 24-bit RGB, with temporary GDI resources freed and the existing bitmap retained on API failure.
-The Windows release job runs `.github/scripts/installerDpiTest/installerDpiTest.ps1` after bundling. It executes
+The Windows `installer-dpi` CI job and release job run `.github/scripts/installerDpiTest/installerDpiTest.ps1`. It executes
 the actual NSIS helper with a checker fixture at 100%, 150% and 200%, verifies filtered pixels and bitmap sizes,
 and repeats 120 resizes to check resource cleanup. To reproduce on Windows, run the same script after a bundle
-build; its optional `-Makensis` argument selects the existing NSIS compiler.
+build; its optional `-Makensis` argument selects the existing NSIS compiler. CI downloads the same NSIS 3.11
+toolchain as Tauri and verifies its published SHA-256 before execution; the release job uses the bundled compiler.
 Setup and uninstall explicitly use the application ICO for their window and executable icons, including
 32-bit frames at native small-icon sizes; omitting these settings falls back to NSIS's stock icons.
 Tauri's installer templates and installation behavior remain the defaults.
