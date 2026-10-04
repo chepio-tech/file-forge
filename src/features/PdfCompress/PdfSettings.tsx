@@ -62,6 +62,7 @@ function PdfSettings({ preset, options, disabled, onPreset, onCustom, onOptions 
       </div>
       <p className="pdf-settings__hint">
         {hint}
+        {options.images?.compressFlatePhotos && ` ${messages.pdf.flatePhotosHint}`}
         {preset === "screen" && ` ${messages.pdf.screenHint}`}
       </p>
       <div className="pdf-settings__removal">

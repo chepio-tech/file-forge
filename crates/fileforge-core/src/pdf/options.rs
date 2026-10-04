@@ -31,6 +31,9 @@ pub struct PdfOptions {
 pub struct ImageOptions {
     pub jpeg_quality: u8,
     pub max_dpi: Option<u16>,
+    /// Convert suitable Flate photographs to JPEG only with at least 20% savings (ADR-0016). Omitted by older clients.
+    #[serde(default)]
+    pub compress_flate_photos: bool,
 }
 
 impl PdfOptions {
@@ -58,7 +61,10 @@ mod tests {
     use super::*;
 
     fn lossy(jpeg_quality: u8, max_dpi: Option<u16>) -> PdfOptions {
-        PdfOptions { images: Some(ImageOptions { jpeg_quality, max_dpi }), ..PdfOptions::LOSSLESS }
+        PdfOptions {
+            images: Some(ImageOptions { jpeg_quality, max_dpi, compress_flate_photos: false }),
+            ..PdfOptions::LOSSLESS
+        }
     }
 
     #[test]
@@ -85,5 +91,22 @@ mod tests {
         let json = r#"{"images":null,"stripMetadata":true,"stripEditingData":false}"#;
         let stripping = PdfOptions { strip_metadata: true, ..PdfOptions::LOSSLESS };
         assert_eq!(serde_json::from_str::<PdfOptions>(json).ok(), Some(stripping));
+    }
+
+    #[test]
+    fn flate_photo_conversion_is_explicit_and_defaults_off_for_older_clients() {
+        let legacy = r#"{"images":{"jpegQuality":70,"maxDpi":150}}"#;
+        let options = serde_json::from_str::<PdfOptions>(legacy).expect("legacy payload");
+        assert!(!options.images.expect("image options").compress_flate_photos);
+        let enabled = r#"{"images":{"jpegQuality":70,"maxDpi":150,"compressFlatePhotos":true}}"#;
+        let options = serde_json::from_str::<PdfOptions>(enabled).expect("new payload");
+        assert!(options.images.expect("image options").compress_flate_photos);
+        assert_eq!(serde_json::to_value(options).expect("serialize")["images"]["compressFlatePhotos"], true);
+        assert!(
+            serde_json::from_str::<PdfOptions>(
+                r#"{"images":{"jpegQuality":70,"maxDpi":150,"compressFlatePhotos":"true"}}"#
+            )
+            .is_err()
+        );
     }
 }

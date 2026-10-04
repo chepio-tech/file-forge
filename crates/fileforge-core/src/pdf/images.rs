@@ -1,6 +1,6 @@
 //! Lossy image pass (Balanced / Maximum / Screen presets). Every change is conservative: unusual encodings are skipped,
 //! and a new encoding is kept only if it is clearly smaller than the original. JPEG and JPEG 2000 images become JPEG;
-//! raw images keep lossless Deflate and only lose resolution.
+//! Flate photographs may become JPEG on explicit request; detected screen content keeps Deflate (ADR-0016).
 
 // Core
 use std::collections::HashMap;
@@ -17,6 +17,7 @@ use super::jpx;
 use super::limits::Limits;
 use super::objects::{dict_integer, dict_name, filters, resolve};
 use super::options::ImageOptions;
+use super::photos;
 use super::placement::DisplaySize;
 use super::streams::deflate;
 
@@ -25,6 +26,8 @@ use super::streams::deflate;
 const DOWNSAMPLE_THRESHOLD: f64 = 1.15;
 /// A lossy original (JPEG or JPEG 2000) is replaced only by a JPEG at least 2% smaller.
 const MIN_LOSSY_GAIN: f64 = 0.98;
+/// Trading lossless pixels for JPEG requires at least 20% savings over both the input and equivalent Deflate.
+const MIN_PHOTO_GAIN: f64 = 0.80;
 /// Images decoded at once. Each holds its full bitmap (up to ~450 MB at the pixel limit, ~0.8 GB while decoding JPEG
 /// 2000 at its sample limit), so this bounds peak memory; measured: four 36 MP photos take ~1 s each on one core.
 const MAX_PARALLEL_IMAGES: usize = 4;
@@ -233,10 +236,8 @@ fn encode(stream: &Stream, candidate: &Candidate, options: &ImageOptions, limits
             let limit = (stream.content.len() as f64 * MIN_LOSSY_GAIN) as usize;
             (bytes.len() < limit).then_some((bytes, "DCTDecode", size))?
         }
-        // Raw pixels are already lossless; only resolution can be reduced.
-        [] | [b"FlateDecode"] if candidate.target.is_some() => {
-            let (bytes, size) = downsample_raw(stream, candidate, limits)?;
-            (bytes.len() < stream.content.len()).then_some((bytes, "FlateDecode", size))?
+        [] | [b"FlateDecode"] if candidate.target.is_some() || (options.compress_flate_photos && !chain.is_empty()) => {
+            encode_raw(stream, candidate, options, limits)?
         }
         _ => return None,
     };
@@ -275,26 +276,85 @@ fn decode_jpx(jpx: &[u8], candidate: &Candidate, limits: &Limits) -> Option<Dyna
 fn encode_jpeg(image: DynamicImage, candidate: &Candidate, quality: u8) -> Option<(Vec<u8>, (u32, u32))> {
     let image = resize(image, candidate.target);
     let size = (image.width(), image.height());
-    let (data, color) = match candidate.pixels {
-        Pixels::Gray => (image.into_luma8().into_raw(), ColorType::Luma),
-        Pixels::Rgb => (image.into_rgb8().into_raw(), ColorType::Rgb),
+    Some((jpeg_bytes(&image, candidate.pixels, quality)?, size))
+}
+
+fn jpeg_bytes(image: &DynamicImage, pixels: Pixels, quality: u8) -> Option<Vec<u8>> {
+    let (data, color) = match pixels {
+        Pixels::Gray => (image.as_luma8()?.as_raw(), ColorType::Luma),
+        Pixels::Rgb => (image.as_rgb8()?.as_raw(), ColorType::Rgb),
     };
     let mut out = Vec::new();
     let mut encoder = Encoder::new(&mut out, quality);
     encoder.set_optimized_huffman_tables(true);
-    encoder.encode(&data, u16::try_from(size.0).ok()?, u16::try_from(size.1).ok()?, color).ok()?;
-    Some((out, size))
+    encoder.encode(data, u16::try_from(image.width()).ok()?, u16::try_from(image.height()).ok()?, color).ok()?;
+    Some(out)
 }
 
-fn downsample_raw(stream: &Stream, candidate: &Candidate, limits: &Limits) -> Option<(Vec<u8>, (u32, u32))> {
-    let raw = stream.get_plain_content_with_limit(limits.max_stream_bytes).ok()?;
-    let image = resize(bitmap(candidate, raw)?, candidate.target);
+type RawEncoding = (Vec<u8>, &'static str, (u32, u32));
+
+fn encode_raw(stream: &Stream, candidate: &Candidate, options: &ImageOptions, limits: &Limits) -> Option<RawEncoding> {
+    let image = bitmap(candidate, raw_samples(stream, candidate, limits)?)?;
+    let can_convert = options.compress_flate_photos
+        && filters(stream)? == [b"FlateDecode"]
+        && ![b"Decode".as_slice(), b"Mask", b"SMask"].iter().any(|key| stream.dict.has(key))
+        && photos::is_photographic(image.as_bytes(), candidate.width, candidate.height, candidate.pixels.components());
+    // Inspect source pixels first: resampling would hide sharp text/UI edges.
+    if !can_convert && candidate.target.is_none() {
+        return None;
+    }
+    let image = resize(image, candidate.target);
     let size = (image.width(), image.height());
-    let data = match candidate.pixels {
-        Pixels::Gray => image.into_luma8().into_raw(),
-        Pixels::Rgb => image.into_rgb8().into_raw(),
-    };
-    Some((deflate(&data)?, size))
+    let lossless = deflate(image.as_bytes())?;
+    if can_convert
+        && let Some(jpeg) = jpeg_bytes(&image, candidate.pixels, options.jpeg_quality)
+        && photo_gain_is_worthwhile(jpeg.len(), stream.content.len(), lossless.len())
+    {
+        return Some((jpeg, "DCTDecode", size));
+    }
+    // A photo veto or an expensive JPEG keeps the existing lossless downsampling path.
+    (candidate.target.is_some() && lossless.len() < stream.content.len()).then_some((lossless, "FlateDecode", size))
+}
+
+fn photo_gain_is_worthwhile(jpeg: usize, original: usize, deflate: usize) -> bool {
+    jpeg as f64 <= original.min(deflate) as f64 * MIN_PHOTO_GAIN
+}
+
+/// lopdf handles direct predictor dictionaries only. Validate their layout before decoding; indirect/array
+/// parameters or oversized/mismatched predictor rows must not be silently interpreted as plain pixels.
+fn raw_samples(stream: &Stream, candidate: &Candidate, limits: &Limits) -> Option<Vec<u8>> {
+    if let Ok(params) = stream.dict.get(b"DecodeParms") {
+        match params {
+            Object::Null => {}
+            Object::Dictionary(params) => {
+                let integer = |key: &[u8], default: i64| -> Option<i64> {
+                    match params.get(key).ok() {
+                        Some(Object::Integer(value)) => Some(*value),
+                        None => Some(default),
+                        _ => None,
+                    }
+                };
+                let predictor = integer(b"Predictor", 1)?;
+                if !matches!(predictor, 1 | 2 | 10..=15) {
+                    return None;
+                }
+                if predictor != 1
+                    && (integer(b"Columns", 1)? != i64::from(candidate.width)
+                        || integer(b"Colors", 1)? != candidate.pixels.components() as i64
+                        || integer(b"BitsPerComponent", 8)? != 8)
+                {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
+    }
+    let expected = (candidate.width as usize)
+        .checked_mul(candidate.height as usize)?
+        .checked_mul(candidate.pixels.components())?;
+    // PNG predictors add one filter byte per row before their reversal.
+    let bound = expected.checked_add(candidate.height as usize)?.min(limits.max_stream_bytes);
+    stream.get_plain_content_with_limit(bound).ok()
 }
 
 /// Interleaved 8-bit samples as an image, if their count matches the candidate's size and layout.
@@ -347,5 +407,28 @@ mod tests {
     fn unknown_or_degenerate_placements_never_downsample() {
         assert_eq!(target_size(4000, 3000, None, 150), None);
         assert_eq!(target_size(4000, 3000, shown(0.0, 3.0), 150), None);
+    }
+
+    #[test]
+    fn trading_lossless_pixels_for_jpeg_requires_twenty_percent_savings_against_both_encodings() {
+        assert!(photo_gain_is_worthwhile(80, 100, 200));
+        assert!(photo_gain_is_worthwhile(80, 200, 100));
+        assert!(!photo_gain_is_worthwhile(81, 100, 200));
+        assert!(!photo_gain_is_worthwhile(81, 200, 100));
+        assert!(!photo_gain_is_worthwhile(90, 100, 100));
+    }
+
+    #[test]
+    fn flate_decoding_honors_the_stream_limit_and_expected_sample_count() {
+        let candidate = Candidate { id: (1, 0), pixels: Pixels::Rgb, width: 64, height: 64, target: None };
+        let samples = vec![42; 64 * 64 * 3];
+        let stream = Stream::new(lopdf::dictionary! { "Filter" => "FlateDecode" }, deflate(&samples).expect("deflate"));
+        assert_eq!(raw_samples(&stream, &candidate, &Limits::DEFAULT), Some(samples));
+        let limits = Limits { max_stream_bytes: 100, ..Limits::DEFAULT };
+        assert_eq!(raw_samples(&stream, &candidate, &limits), None);
+        let oversized = vec![42; 64 * 64 * 3 + 65];
+        let stream =
+            Stream::new(lopdf::dictionary! { "Filter" => "FlateDecode" }, deflate(&oversized).expect("deflate"));
+        assert_eq!(raw_samples(&stream, &candidate, &Limits::DEFAULT), None);
     }
 }

@@ -40,6 +40,8 @@ Image, video and audio tools are planned; they are shown as **Soon** in the app.
   for PDFs, including subfolders; hidden files and app or document packages are left out.
 - Choose Lossless, Balanced, Maximum, Screen or Custom settings with exact JPEG quality and DPI values. JPEG and
   JPEG 2000 images are re-encoded as JPEG; Screen (100 DPI) makes scans much smaller for on-screen reading.
+- Maximum also converts suitable losslessly stored photographs to JPEG when it saves at least 20%. Detected
+  screenshots and line art keep lossless image encoding; the preset's DPI downsampling still applies.
 - Optionally remove metadata, page thumbnails and Illustrator/Photoshop editing data; PDF/A, PDF/UA and PDF/X
   files keep the metadata they require.
 - Follow each file's progress, cancel a running batch, and compare original/result sizes per file and for the
@@ -85,6 +87,8 @@ see [deployment](docs/architecture/deployment.md).
 - Cancel stops a running document at its next checkpoint; parsing and saving a document are not interrupted.
 - One drop adds up to 1,000 files from folders, searched up to 16 levels deep.
 - Unsupported image encodings are preserved; lossy presets do not guarantee additional savings on every PDF.
+- Photo/screenshot detection uses pixel heuristics and may misclassify unusual content; Lossless preserves every
+  image's pixels. A screenshot displaying only a photograph is indistinguishable from that photograph.
 - Batch saving requires a destination filesystem that supports hard links (for example APFS, NTFS or ext4).
 - The application's license has not been chosen. Dependency licenses remain their respective authors' licenses.
 

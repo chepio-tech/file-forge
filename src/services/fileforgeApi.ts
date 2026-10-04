@@ -45,6 +45,8 @@ export interface ImageOptions {
   jpegQuality: number;
   /** 72–600 or `null` to keep every image's resolution. */
   maxDpi: number | null;
+  /** Suitable Flate photos become JPEG only with at least 20% savings; omitted means false (ADR-0016). */
+  compressFlatePhotos?: boolean;
 }
 
 /** `images: null` is the lossless preset. The removal options work with every preset (ADR-0012). */

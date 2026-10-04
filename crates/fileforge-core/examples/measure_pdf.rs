@@ -12,15 +12,24 @@ fn main() {
         ("lossless", PdfOptions::LOSSLESS),
         (
             "balanced",
-            PdfOptions { images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200) }), ..PdfOptions::LOSSLESS },
+            PdfOptions {
+                images: Some(ImageOptions { jpeg_quality: 85, max_dpi: Some(200), compress_flate_photos: false }),
+                ..PdfOptions::LOSSLESS
+            },
         ),
         (
             "maximum",
-            PdfOptions { images: Some(ImageOptions { jpeg_quality: 70, max_dpi: Some(150) }), ..PdfOptions::LOSSLESS },
+            PdfOptions {
+                images: Some(ImageOptions { jpeg_quality: 70, max_dpi: Some(150), compress_flate_photos: true }),
+                ..PdfOptions::LOSSLESS
+            },
         ),
         (
             "screen",
-            PdfOptions { images: Some(ImageOptions { jpeg_quality: 65, max_dpi: Some(100) }), ..PdfOptions::LOSSLESS },
+            PdfOptions {
+                images: Some(ImageOptions { jpeg_quality: 65, max_dpi: Some(100), compress_flate_photos: false }),
+                ..PdfOptions::LOSSLESS
+            },
         ),
     ];
     for path in std::env::args().skip(1) {
