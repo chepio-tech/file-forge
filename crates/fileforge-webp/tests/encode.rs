@@ -52,7 +52,7 @@ fn decode(webp: &[u8]) -> (u32, u32, Vec<u8>) {
 fn rgba(pixels: &[u8], layout: Layout) -> Vec<u8> {
     match layout {
         Layout::Rgba => pixels.to_vec(),
-        Layout::Rgb => pixels.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
+        Layout::Rgb => pixels.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
     }
 }
 
@@ -71,7 +71,7 @@ fn decode_with_libwebp(webp: &[u8]) -> Vec<u8> {
 }
 
 fn alpha(rgba: &[u8]) -> Vec<u8> {
-    rgba.chunks_exact(4).map(|p| p[3]).collect()
+    rgba.as_chunks::<4>().0.iter().map(|p| p[3]).collect()
 }
 
 #[test]

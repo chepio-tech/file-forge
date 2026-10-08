@@ -36,7 +36,9 @@ fn picture(width: u32, height: u32, layout: Layout) -> Vec<u8> {
     match layout {
         Layout::Rgb => rgb,
         Layout::Rgba => rgb
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .enumerate()
             .flat_map(|(index, p)| {
                 let (x, y) = (index as u32 % width, index as u32 / width);
@@ -137,13 +139,13 @@ fn decode(webp: &[u8]) -> (u32, u32, Vec<u8>) {
     let mut pixels = vec![0; decoder.output_buffer_size().expect("fits")];
     decoder.read_image(&mut pixels).expect("decodes");
     if !alpha {
-        pixels = pixels.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect();
+        pixels = pixels.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect();
     }
     (width, height, pixels)
 }
 
 fn alpha(rgba: &[u8]) -> Vec<u8> {
-    rgba.chunks_exact(4).map(|p| p[3]).collect()
+    rgba.as_chunks::<4>().0.iter().map(|p| p[3]).collect()
 }
 
 fn ids(webp: &[u8]) -> Vec<[u8; 4]> {
@@ -177,7 +179,7 @@ fn lossless_webp_keeps_every_sample_and_shrinks_in_every_preset() {
 fn colors_under_full_transparency_survive() {
     let input = weak_lossless(64, 48, Layout::Rgba);
     let (_, _, before) = decode(&input);
-    assert!(before.chunks_exact(4).any(|p| p[3] == 0 && p[..3] != [0, 0, 0]), "fixture has hidden colors");
+    assert!(before.as_chunks::<4>().0.iter().any(|p| p[3] == 0 && p[..3] != [0, 0, 0]), "fixture has hidden colors");
     let output = compress(&input, &LOSSLESS).expect("compresses");
     assert!(decode(&output.bytes).2 == before);
 }
