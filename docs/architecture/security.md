@@ -51,6 +51,15 @@ charstring scan is capped at 64 M interpreted bytes and 10 nested calls, and the
 A rewritten font is used only after parsing it again proves that every glyph executes the same bytes.
 Corrupted fonts are fuzzed in the `pdf::cff` unit tests.
 
+## Untrusted images (ADR-0019)
+JPEG and PNG files are parsed only by safe Rust: `jpeg-decoder`, the `png` crate and the engine's own JPEG marker and
+scan reader (`raster::jpeg`), all bounds-checked; scan decoding is strict and fails rather than guessing. The
+format comes from the content, never the extension. Pixel counts are checked from the header before decoding.
+Two C libraries are linked, both on the encoding side only: libdeflate (through oxipng) compresses rows and an ICC
+profile the `png` crate already decoded, and, from the WebP step on, libwebp encodes decoded pixels. Neither ever
+reads the user's file. Every candidate is decoded again before use. Signed files (C2PA, PNG `dSIG`) are returned
+unchanged. Corrupted JPEGs and PNGs are fuzzed by byte flips in `tests/raster_compress.rs`.
+
 ## Temp results
 Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
 the next start. Staging files are created exclusively, flushed and closed before publication, and removed on failure.

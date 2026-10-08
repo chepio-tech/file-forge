@@ -20,3 +20,4 @@
 | [ADR-0016](ADR-0016-flate-photographs.md) | Convert suitable Flate photographs to JPEG in Maximum | Accepted |
 | [ADR-0017](ADR-0017-folder-drops.md) | Dropped folders are searched in Rust for the active tool's file types | Accepted |
 | [ADR-0018](ADR-0018-cff-subroutine-pruning.md) | Unreachable CFF subroutines are removed in every preset | Accepted |
+| [ADR-0019](ADR-0019-image-compression.md) | Image compression with an own lossless JPEG transcoder, mozjpeg-rs and oxipng | Accepted |

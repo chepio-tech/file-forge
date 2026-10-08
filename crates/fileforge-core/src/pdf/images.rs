@@ -12,7 +12,6 @@ use jpeg_encoder::{ColorType, Encoder};
 use lopdf::{Document, Object, ObjectId, Stream};
 use rayon::prelude::*;
 // Domain
-use super::control::{Control, Counter, Stage};
 use super::jpx;
 use super::limits::Limits;
 use super::objects::{dict_integer, dict_name, filters, resolve};
@@ -20,6 +19,7 @@ use super::options::ImageOptions;
 use super::photos;
 use super::placement::DisplaySize;
 use super::streams::deflate;
+use crate::control::{Control, Counter, Stage};
 
 /// Downsample only when the image is more than 15% above the target resolution; smaller gains are not worth a
 /// resample.

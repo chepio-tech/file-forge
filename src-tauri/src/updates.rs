@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn unsaved_results_need_the_users_consent() {
         let (dir, results) = store();
-        results.put(1, b"%PDF-1").expect("stores");
+        results.put(1, b"%PDF-1", "pdf").expect("stores");
         assert!(matches!(claim(&results, false), Err(AppError::UnsavedResults)));
         assert!(claim(&results, true).is_ok());
 

@@ -19,6 +19,9 @@ export interface ToolDefinition {
   accepts: FileKind[];
   /** Human-readable format list for prompts and dialog filters, e.g. "PDF". */
   formats: string;
+  /** Lowercase file extensions the tool takes when it handles only some formats of its kinds; files with other
+   *  extensions are rejected like files of other kinds. The engine still checks the content. */
+  extensions?: string[];
   status: "ready" | "soon";
 }
 
@@ -38,7 +41,14 @@ export const featureCatalog: GroupDefinition[] = [
   {
     id: "images",
     tools: [
-      { id: "imageCompress", icon: "compress", accepts: ["image"], formats: "JPEG, PNG, WebP, HEIC", status: "soon" },
+      {
+        id: "imageCompress",
+        icon: "compress",
+        accepts: ["image"],
+        formats: "JPEG, PNG",
+        extensions: ["jpg", "jpeg", "png"],
+        status: "ready",
+      },
       { id: "imageConvert", icon: "convert", accepts: ["image"], formats: "JPEG, PNG, WebP, HEIC", status: "soon" },
     ],
   },

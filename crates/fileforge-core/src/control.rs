@@ -1,11 +1,12 @@
-//! How a caller follows and stops a running compression.
+//! How a caller follows and stops a running compression, shared by every engine.
 
 // Core
 use std::sync::{Mutex, PoisonError};
 
 use serde::Serialize;
 
-/// Pipeline stages, reported in this order. `Images` only runs for lossy presets.
+/// Pipeline stages, reported in this order. PDFs: `Loading`, `Structure`, `Images` (lossy presets only), `Streams`,
+/// `Saving`, `Verifying`. Images: `Loading`, `Encoding`, `Verifying`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Stage {
@@ -13,6 +14,7 @@ pub enum Stage {
     Structure,
     Images,
     Streams,
+    Encoding,
     Saving,
     Verifying,
 }
@@ -29,8 +31,8 @@ pub struct Progress {
 
 /// Hooks called while a compression runs, also from worker threads: keep both cheap.
 pub trait Control: Sync {
-    /// Checked between stages, before each image and before each stream. Once it returns `true` it must keep doing
-    /// so; the compression then ends with `PdfError::Cancelled`.
+    /// Checked between stages and before each unit of work (image, stream, encoding pass). Once it returns `true` it
+    /// must keep doing so; the compression then ends with the engine's `Cancelled` error.
     fn is_cancelled(&self) -> bool {
         false
     }

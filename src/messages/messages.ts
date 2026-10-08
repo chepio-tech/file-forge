@@ -21,7 +21,11 @@ const messages = {
       description: "Rewrites the PDF structure without touching content, and optionally recompresses images.",
     },
     pdfConvert: { nav: "Convert", title: "Convert PDF" },
-    imageCompress: { nav: "Compress", title: "Compress images" },
+    imageCompress: {
+      nav: "Compress",
+      title: "Compress images",
+      description: "Recodes JPEG and PNG files without changing a pixel, and optionally re-encodes JPEGs.",
+    },
     imageConvert: { nav: "Convert", title: "Convert images" },
     videoCompress: { nav: "Compress", title: "Compress video" },
     videoConvert: { nav: "Convert", title: "Convert video" },
@@ -52,6 +56,38 @@ const messages = {
         : "The dropped folders are too large or too deeply nested to add at once, so some files were not added. Drop smaller folders.",
     dismiss: "Dismiss",
   },
+  /** Shared by every compression tool: run, progress, results and saving. */
+  compression: {
+    outdated: "Settings changed since the last run. Compress again to apply them.",
+    compress: (count: number) => (count === 1 ? "Compress 1 file" : `Compress ${count} files`),
+    compressing: (current: number, total: number) => `Compressing ${current} of ${total}…`,
+    cancel: "Cancel",
+    cancelling: "Cancelling…",
+    cancelled: "Cancelled",
+    waiting: "Waiting",
+    working: "Compressing…",
+    stages: {
+      loading: "Reading",
+      structure: "Cleaning structure",
+      images: "Images",
+      streams: "Streams",
+      encoding: "Optimizing",
+      saving: "Writing",
+      verifying: "Verifying",
+    },
+    /** "Images 3 of 12" for counted stages, "Reading…" otherwise. */
+    stageProgress: (stage: string, done: number, total: number) =>
+      total > 0 ? `${stage} ${done} of ${total}` : `${stage}…`,
+    alreadyOptimal: "Already optimal",
+    alreadyOptimalNothingRemoved: "Already optimal: original kept, nothing removed",
+    reduction: (percent: string) => `−${percent}%`,
+    save: "Save…",
+    saving: "Saving…",
+    saveAll: (count: number) => (count === 1 ? "Save 1 result to folder…" : `Save ${count} results to folder…`),
+    saved: "Saved",
+    savedAs: (name: string) => `Saved as ${name}. Click to show it in its folder.`,
+    total: (before: string, after: string) => `${before} → ${after}`,
+  },
   pdf: {
     settings: "Compression",
     presets: { lossless: "Lossless", balanced: "Balanced", maximum: "Maximum", screen: "Screen", custom: "Custom" },
@@ -70,34 +106,6 @@ const messages = {
     jpegQuality: "JPEG quality",
     maxDpi: "Max DPI",
     noLimit: "Keep",
-    outdated: "Settings changed since the last run. Compress again to apply them.",
-    compress: (count: number) => (count === 1 ? "Compress 1 file" : `Compress ${count} files`),
-    compressing: (current: number, total: number) => `Compressing ${current} of ${total}…`,
-    cancel: "Cancel",
-    cancelling: "Cancelling…",
-    cancelled: "Cancelled",
-    waiting: "Waiting",
-    working: "Compressing…",
-    stages: {
-      loading: "Reading",
-      structure: "Cleaning structure",
-      images: "Images",
-      streams: "Streams",
-      saving: "Writing",
-      verifying: "Verifying",
-    },
-    /** "Images 3 of 12" for counted stages, "Reading…" otherwise. */
-    stageProgress: (stage: string, done: number, total: number) =>
-      total > 0 ? `${stage} ${done} of ${total}` : `${stage}…`,
-    alreadyOptimal: "Already optimal",
-    alreadyOptimalNothingRemoved: "Already optimal: original kept, nothing removed",
-    reduction: (percent: string) => `−${percent}%`,
-    save: "Save…",
-    saving: "Saving…",
-    saveAll: (count: number) => (count === 1 ? "Save 1 result to folder…" : `Save ${count} results to folder…`),
-    saved: "Saved",
-    savedAs: (name: string) => `Saved as ${name}. Click to show it in its folder.`,
-    total: (before: string, after: string) => `${before} → ${after}`,
     removed: {
       metadata: "metadata removed",
       keptForStandard: "document metadata kept for PDF/A, PDF/UA or PDF/X",
@@ -109,6 +117,36 @@ const messages = {
         `${pages} ${pages === 1 ? "page" : "pages"}`,
         `${recompressed} ${recompressed === 1 ? "image" : "images"} re-encoded, ${downsampled} downsampled`,
         `${duplicates} duplicate ${duplicates === 1 ? "stream" : "streams"} merged`,
+      ].join(" · "),
+  },
+  image: {
+    settings: "Compression",
+    presets: { lossless: "Lossless", balanced: "Balanced", maximum: "Maximum", custom: "Custom" },
+    /** `quality: null` keeps JPEG pixels exactly. */
+    hint: (quality: number | null, pngLevel: number, zopfli: boolean) =>
+      [
+        quality === null
+          ? "JPEG pixels stay bit-identical: only the coding gets smaller."
+          : `JPEGs are re-encoded at quality ${quality} when that saves at least 2%.`,
+        `PNGs stay lossless at effort ${pngLevel} of 6${zopfli ? ", with Zopfli for small images" : ""}.`,
+      ].join(" "),
+    jpegQuality: "JPEG quality",
+    pngLevel: "PNG effort",
+    keepPixels: "Keep",
+    stripMetadata: "Remove metadata",
+    stripMetadataHint: "Camera details, location, XMP, IPTC and comments. Color profiles and orientation stay.",
+    kept: {
+      extraData: "Kept as is: contains extra images, such as an HDR gain map",
+      signed: "Kept as is: signed with Content Credentials",
+      animated: "Kept as is: animated PNG",
+      unsupportedEncoding: "Kept as is: this JPEG's encoding cannot be rewritten losslessly",
+    },
+    formats: { jpeg: "JPEG", png: "PNG" },
+    details: (format: string, width: number, height: number, reencoded: boolean, metadataRemoved: boolean) =>
+      [
+        `${format} ${width}×${height}`,
+        reencoded ? "re-encoded" : "pixels unchanged",
+        ...(metadataRemoved ? ["metadata removed"] : []),
       ].join(" · "),
   },
   updates: {
@@ -133,6 +171,9 @@ const messages = {
     pdfEncrypted: "Password-protected PDF. File Forge never removes protection, so it was skipped.",
     pdfSigned: "Digitally signed PDF. Compressing would invalidate the signature, so it was skipped.",
     pdfMalformed: "This file is damaged or not a valid PDF.",
+    imageTooLarge: "This image is larger than the 256 MB or 120-megapixel limit.",
+    imageUnsupported: "Only JPEG and PNG images can be compressed. This file is in another format.",
+    imageMalformed: "This file is damaged or not a valid JPEG or PNG image.",
     invalidOptions: "These settings are out of range.",
     cancelled: "Compression was cancelled.",
     busy: "Wait until the current compression or save finishes, then try again.",

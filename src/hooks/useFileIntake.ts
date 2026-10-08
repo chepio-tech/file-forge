@@ -31,8 +31,9 @@ export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake
 
   const accept = useCallback(
     (outcome: RegisterOutcome) => {
-      const accepted = outcome.files.filter((file) => tool.accepts.includes(file.kind));
-      const rejected = outcome.files.filter((file) => !tool.accepts.includes(file.kind));
+      const takes = (file: FileInfo) => tool.accepts.includes(file.kind) && hasAcceptedExtension(tool, file.name);
+      const accepted = outcome.files.filter(takes);
+      const rejected = outcome.files.filter((file) => !takes(file));
       for (const file of rejected) void fileforgeApi.removeFile(file.id);
 
       setFiles((current) => {
@@ -99,6 +100,13 @@ export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake
   }, [files]);
 
   return { files, notice, dismissNotice: () => setNotice([]), pick, remove, clear };
+}
+
+/** Tools without an extension list take every file of their kinds. */
+function hasAcceptedExtension(tool: ToolDefinition, name: string): boolean {
+  if (!tool.extensions) return true;
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && tool.extensions.includes(name.slice(dot + 1).toLowerCase());
 }
 
 export default useFileIntake;
