@@ -7,7 +7,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use fileforge_core::FileKind;
-use fileforge_core::pdf::{self, MAX_INPUT_BYTES, PdfOptions, PdfReport, Progress};
+use fileforge_core::pdf::{self, PdfOptions, PdfReport, Progress};
+use fileforge_core::raster::{self, RasterFormat, RasterOptions, RasterReport};
 use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
@@ -86,14 +87,62 @@ pub async fn compress_pdf(
             return Err(AppError::Cancelled);
         }
         let file = app.state::<FileRegistry>().get(id)?;
-        let input = read_pdf_input(&file.path, MAX_INPUT_BYTES)?;
+        let input = read_input(&file.path, pdf::MAX_INPUT_BYTES, AppError::PdfTooLarge)?;
         // A closed webview cannot receive progress; the compression itself still completes.
         let control = JobControl::new(&cancellation, ticket, |progress| drop(on_progress.send(progress)));
         let output = pdf::compress_controlled(&input, &options, &control)?;
-        results.put(id, &output.bytes)?;
+        results.put(id, &output.bytes, "pdf")?;
         Ok(output.report)
     })
     .await?
+}
+
+/// Compresses one registered JPEG or PNG into a temp result, like `compress_pdf`. The format comes from the file's
+/// content; the result keeps it.
+#[tauri::command]
+pub async fn compress_image(
+    app: AppHandle,
+    id: FileId,
+    options: RasterOptions,
+    on_progress: Channel<Progress>,
+) -> Result<RasterReport, AppError> {
+    options.validate()?;
+    let ticket = app.state::<Cancellation>().ticket();
+    tauri::async_runtime::spawn_blocking(move || {
+        let results = app.state::<ResultStore>();
+        let _slot = results.work_slot();
+        let cancellation = app.state::<Cancellation>();
+        if cancellation.is_cancelled(ticket) {
+            return Err(AppError::Cancelled);
+        }
+        let file = app.state::<FileRegistry>().get(id)?;
+        let input =
+            read_input(&file.path, raster::MAX_INPUT_BYTES, |limit| AppError::ImageTooLarge(format!("{limit} bytes")))?;
+        let control = JobControl::new(&cancellation, ticket, |progress| drop(on_progress.send(progress)));
+        let output = raster::compress_controlled(&input, &options, &control)?;
+        results.put(id, &output.bytes, image_extension(&file.info.name, output.report.format))?;
+        Ok(output.report)
+    })
+    .await?
+}
+
+/// The result's extension: the original one when it names the format (`.jpeg` stays `.jpeg`), else the usual one.
+fn image_extension(name: &str, format: RasterFormat) -> &'static str {
+    let original = Path::new(name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase());
+    match format {
+        RasterFormat::Jpeg if original.as_deref() == Some("jpeg") => "jpeg",
+        RasterFormat::Jpeg => "jpg",
+        RasterFormat::Png => "png",
+    }
+}
+
+/// Save-dialog filter for a result's extension.
+fn dialog_filter(extension: &str) -> (&'static str, &'static [&'static str]) {
+    match extension {
+        "jpg" | "jpeg" => ("JPEG", &["jpg", "jpeg"]),
+        "png" => ("PNG", &["png"]),
+        _ => ("PDF", &["pdf"]),
+    }
 }
 
 /// Cancels every compression already started, at its next checkpoint; later compressions are unaffected.
@@ -113,7 +162,12 @@ pub async fn save_result(app: AppHandle, id: FileId) -> Result<Option<String>, A
         let _slot = results.work_slot();
         let file = registry.get(id)?;
         let result = results.get(id).ok_or(AppError::NoResult(id))?;
-        let mut dialog = app.dialog().file().set_file_name(output_name(&file.info.name)).add_filter("PDF", &["pdf"]);
+        let (filter, extensions) = dialog_filter(result.extension);
+        let mut dialog = app
+            .dialog()
+            .file()
+            .set_file_name(output_name(&file.info.name, result.extension))
+            .add_filter(filter, extensions);
         if let Some(parent) = file.path.parent() {
             dialog = dialog.set_directory(parent);
         }
@@ -135,8 +189,8 @@ pub struct SavedFile {
     pub name: String,
 }
 
-/// Asks for a folder and saves every given result into it as `<name>-compressed.pdf`, never overwriting existing
-/// files. Returns what was saved, or `None` when the user cancels.
+/// Asks for a folder and saves every given result into it as `<name>-compressed.<extension>`, never overwriting
+/// existing files. Returns what was saved, or `None` when the user cancels.
 #[tauri::command]
 pub async fn save_results_to_folder(app: AppHandle, ids: Vec<FileId>) -> Result<Option<Vec<SavedFile>>, AppError> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -156,7 +210,7 @@ pub async fn save_results_to_folder(app: AppHandle, ids: Vec<FileId>) -> Result<
         for id in ids {
             let file = registry.get(id)?;
             let result = results.get(id).ok_or(AppError::NoResult(id))?;
-            let target = copy_result_to_folder(&result, &folder, &output_name(&file.info.name))?;
+            let target = copy_result_to_folder(&result, &folder, &output_name(&file.info.name, result.extension))?;
             saved.push(SavedFile { id, name: display_name(&target) });
             results.mark_saved(id, target);
         }
@@ -190,7 +244,7 @@ fn display_name(path: &std::path::Path) -> String {
 }
 
 /// Limit the actual read as well as metadata: a file can grow after registration or after the size check.
-fn read_pdf_input(path: &Path, limit: u64) -> Result<Vec<u8>, AppError> {
+fn read_input(path: &Path, limit: u64, too_large: impl Fn(u64) -> AppError) -> Result<Vec<u8>, AppError> {
     if !path.metadata()?.is_file() {
         return Err(AppError::NotAFile(display_name(path)));
     }
@@ -200,16 +254,16 @@ fn read_pdf_input(path: &Path, limit: u64) -> Result<Vec<u8>, AppError> {
         return Err(AppError::NotAFile(display_name(path)));
     }
     if metadata.len() > limit {
-        return Err(AppError::PdfTooLarge(limit));
+        return Err(too_large(limit));
     }
-    read_limited(file, limit)
+    read_limited(file, limit, too_large)
 }
 
-fn read_limited(reader: impl Read, limit: u64) -> Result<Vec<u8>, AppError> {
+fn read_limited(reader: impl Read, limit: u64, too_large: impl Fn(u64) -> AppError) -> Result<Vec<u8>, AppError> {
     let mut input = Vec::new();
     reader.take(limit.saturating_add(1)).read_to_end(&mut input)?;
     if input.len() as u64 > limit {
-        return Err(AppError::PdfTooLarge(limit));
+        return Err(too_large(limit));
     }
     Ok(input)
 }
@@ -224,16 +278,26 @@ mod tests {
         let path = dir.path().join("input.pdf");
         std::fs::write(&path, b"%PDF-1.7").expect("input");
 
-        assert_eq!(read_pdf_input(&path, 8).expect("exact limit"), b"%PDF-1.7");
-        assert!(matches!(read_pdf_input(&path, 7), Err(AppError::PdfTooLarge(7))));
-        assert!(matches!(read_pdf_input(dir.path(), 8), Err(AppError::NotAFile(_))));
+        assert_eq!(read_input(&path, 8, AppError::PdfTooLarge).expect("exact limit"), b"%PDF-1.7");
+        assert!(matches!(read_input(&path, 7, AppError::PdfTooLarge), Err(AppError::PdfTooLarge(7))));
+        assert!(matches!(read_input(dir.path(), 8, AppError::PdfTooLarge), Err(AppError::NotAFile(_))));
     }
 
     #[test]
     fn a_growing_input_cannot_read_past_the_limit_plus_one() {
         let mut reader = std::io::Cursor::new(b"more bytes than the limit");
 
-        assert!(matches!(read_limited(&mut reader, 8), Err(AppError::PdfTooLarge(8))));
+        assert!(matches!(read_limited(&mut reader, 8, AppError::PdfTooLarge), Err(AppError::PdfTooLarge(8))));
         assert_eq!(reader.position(), 9);
+    }
+
+    #[test]
+    fn image_results_keep_their_format_extension() {
+        assert_eq!(image_extension("Holiday.JPEG", RasterFormat::Jpeg), "jpeg");
+        assert_eq!(image_extension("IMG_1.JPG", RasterFormat::Jpeg), "jpg");
+        assert_eq!(image_extension("preview.jpg", RasterFormat::Png), "png");
+        assert_eq!(image_extension("no-extension", RasterFormat::Png), "png");
+        assert_eq!(dialog_filter("jpeg"), ("JPEG", &["jpg", "jpeg"][..]));
+        assert_eq!(dialog_filter("pdf"), ("PDF", &["pdf"][..]));
     }
 }

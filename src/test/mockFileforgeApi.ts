@@ -4,8 +4,10 @@ import { vi } from "vitest";
 import type {
   FileInfo,
   PdfOptions,
-  PdfProgress,
   PdfReport,
+  Progress,
+  RasterOptions,
+  RasterReport,
   RegisterOutcome,
   SavedFile,
   UpdateStatus,
@@ -27,8 +29,11 @@ export function createApiMock() {
     setDropKinds: vi.fn(async (_kinds: string[]) => {}),
     removeFile: vi.fn(async (_id: number) => {}),
     compressPdf: vi.fn<
-      (id: number, options: PdfOptions, onProgress?: (progress: PdfProgress) => void) => Promise<PdfReport>
+      (id: number, options: PdfOptions, onProgress?: (progress: Progress) => void) => Promise<PdfReport>
     >(async (id) => report(id)),
+    compressImage: vi.fn<
+      (id: number, options: RasterOptions, onProgress?: (progress: Progress) => void) => Promise<RasterReport>
+    >(async (id) => imageReport(id)),
     cancelCompression: vi.fn(async () => {}),
     saveResult: vi.fn<(id: number) => Promise<string | null>>(async () => null),
     saveResultsToFolder: vi.fn<(ids: number[]) => Promise<SavedFile[] | null>>(async () => null),
@@ -81,6 +86,21 @@ export function report(_id: number, overrides: Partial<PdfReport> = {}): PdfRepo
     metadataKeptForStandard: false,
     thumbnailsRemoved: 0,
     editingDataRemoved: 0,
+    ...overrides,
+  };
+}
+
+/** A JPEG result that saved 30% of a 1 MB file without re-encoding. */
+export function imageReport(_id: number, overrides: Partial<RasterReport> = {}): RasterReport {
+  return {
+    format: "jpeg",
+    width: 4032,
+    height: 3024,
+    originalSize: 1_000_000,
+    outputSize: 700_000,
+    kept: null,
+    reencoded: false,
+    metadataRemoved: false,
     ...overrides,
   };
 }

@@ -11,7 +11,7 @@ flowchart LR
 |---|---|---|
 | Web UI `src/` | Layout, state of tool panels, UI strings, presentation of results | Import `@tauri-apps/*` outside `src/services/fileforgeApi.ts`; handle paths |
 | Desktop shell `src-tauri/` | IPC commands, `FileRegistry` (session ids → paths), `ResultStore` (temp results, one compression at a time), `Cancellation` and progress throttling (`job_control`), app updates (`updates`), native dialogs, drop events | Contain processing logic |
-| Core `crates/fileforge-core/` | `FileKind` detection, PDF engine (`pdf/`: control, guards, metadata, dedupe, fonts, cff, placement, images, jpx, photos, streams) | Depend on `tauri` or any UI crate; touch global state |
+| Core `crates/fileforge-core/` | `FileKind` detection, shared `control` (cancellation, progress), PDF engine (`pdf/`: guards, metadata, dedupe, fonts, cff, placement, images, jpx, photos, streams), image engine (`raster/`: `jpeg/` segments, scans, huffman; `png`, `exif`) | Depend on `tauri` or any UI crate; touch global state |
 
 Allowed dependency directions: UI → shell (IPC only) → core. Core depends on nothing app-specific.
 
@@ -20,6 +20,7 @@ Inside the shell, module dependencies flow from `error` (types) ← `file_regist
 `file_registry` uses `folder_scan` (bounded search of dropped folders, ADR-0017).
 
 UI structure: `components/` shared presentational pieces, plus `UpdateStatus` (sidebar app updates, with its
-`useUpdates` hook); `features/` one folder per tool plus
-`featureCatalog.ts`; `hooks/` shared stateful logic (`useFileIntake`, `useDragHover`); `messages/` all UI strings;
-`services/` the IPC client.
+`useUpdates` hook) and the compression layout every compression tool uses (`CompressionPanel`, `JobStatus`);
+`features/` one folder per tool (settings, presets, the engine adapter for `useCompressionJobs`) plus
+`featureCatalog.ts`; `hooks/` shared stateful logic (`useFileIntake`, `useDragHover`, `useCompressionJobs`);
+`messages/` all UI strings; `services/` the IPC client.

@@ -16,12 +16,26 @@
 
 Flate screen-content checks run before resizing, and the JPEG must beat equivalent Deflate (ADR-0016).
 
+## Critical path: compress one image (ADR-0019)
+1. UI calls `compress_image(id, options)`; the shell validates options, takes the work slot and reads the file as for
+   PDFs, with the image input limit.
+2. `fileforge_core::raster::compress_controlled`: detect JPEG or PNG by content → check the pixel count from the header
+   → keep files with data after the image, Content Credentials, PNG signatures or animation → decode (`jpeg-decoder`,
+   `png`) → build candidates → decode each candidate again → keep the smallest valid one if it is smaller.
+   - JPEG: lossy presets re-encode with `mozjpeg-rs` first and free the pixels; then the lossless transcoder
+     (sequential Huffman 8-bit) or, with metadata removal only, a segment rewrite. A lossless candidate must decode to
+     the same pixel hash; a lossy one must be at least 2% smaller than the best lossless result.
+   - PNG: oxipng optimizes the decoded rows (`RawImage`); the result must decode to the same 16-bit RGBA samples.
+3. Stages reported: `loading`, `encoding`, `verifying`. The shell stores the result with the format's extension.
+
 ## Cancellation (ADR-0011)
 `compress_pdf` takes a ticket from the shell's cancellation counter when it starts, before waiting for the work
 slot; `cancel_compression` advances the counter. The shell checks the ticket after taking the slot (before reading
 the file), and the engine checks it before and after loading, after the structure pass, before each image and
 stream, after the image and stream passes, and before verification. Parsing and saving are single lopdf calls and
-cannot be interrupted, so a cancel takes effect at the next checkpoint. The UI stops starting files as soon as
+cannot be interrupted, so a cancel takes effect at the next checkpoint. Images check between stages, every 4,096 MCUs
+of the JPEG transcoder and inside `mozjpeg-rs`; oxipng cannot be interrupted, but its filter trials stop after 60 s
+and Zopfli runs only on small images. The UI stops starting files as soon as
 Cancel is pressed, even if the IPC call fails; a file that finishes before reaching a checkpoint keeps its result.
 
 The UI runs files strictly one after another; the work slot enforces the same in Rust. Saving and removal also
@@ -44,12 +58,18 @@ clears temp results; on Windows the plugin exits from the installer hook, which 
 | Samples per JPEG 2000 image decoded (pixels × channels) | 100 M (≈ 0.8 GB while decoding) | same |
 | Images decoded concurrently | 4 | `crates/fileforge-core/src/pdf/images.rs` |
 | Charstring bytes interpreted per CFF font (scan budget) | 64 M; beyond it the font stays as it is | `crates/fileforge-core/src/pdf/cff.rs` |
+| Image input file | 256 MiB (`raster::MAX_INPUT_BYTES`) | `crates/fileforge-core/src/raster/limits.rs` |
+| Pixels per image file | 120 MP (covers 100 MP cameras; a 4:4:4 JPEG at the limit needs ≈ 0.7 GB of coefficients) | same |
+| Decoded PNG rows (all channels and bit depths) | 512 MiB | same |
+| PNG rows Zopfli runs on (Maximum) | 512 KiB (≈ 2.5 s for a 256×256 RGBA icon) | same |
+| oxipng filter trials per image | 60 s, then the best result so far | same |
 | Concurrent compressions | 1 | `ResultStore::work_slot` |
 | Folder levels searched below a dropped folder | 16 | `src-tauri/src/folder_scan.rs` (`ScanLimits`) |
 | Directory entries examined per drop | 10,000 | same |
 | Files added from dropped folders per drop | 1,000 | same |
 
 Peak memory ≈ input + parsed document + up to 4 decoded bitmaps (JPEG 2000 decoding: up to ~8 bytes per sample).
+Images: input + decoded pixels (or JPEG coefficients) + one candidate; pixels are freed before the transcoder runs.
 
 ## Failure modes
 | Failure | Behavior |
@@ -58,6 +78,11 @@ Peak memory ≈ input + parsed document + up to 4 decoded bitmaps (JPEG 2000 dec
 | Dropped folder cannot be read | Named in the intake notice; the rest of the drop is added |
 | Dropped folders exceed a search limit | Files found so far are added; the notice says some were not (ADR-0017) |
 | Encrypted or signed | `pdfEncrypted` / `pdfSigned`, file untouched |
+| Not a JPEG or PNG by content (e.g. WebP, HEIC renamed) | `imageUnsupported` for that file |
+| Damaged image | `imageMalformed`; a JPEG the strict transcoder cannot read but `jpeg-decoder` can is kept (`unsupportedEncoding`) |
+| Image above the byte or pixel limit | `imageTooLarge` |
+| Signed (C2PA, `dSIG`), animated PNG or data after the image | Original returned byte for byte with the reason (`kept`) |
+| An image candidate decodes differently | Candidate dropped, original kept; never surfaced as an error |
 | One image fails to decode or re-encode | Image left as is, document still compressed |
 | The JPEG 2000 decoder panics on one image | Caught for that image (ADR-0015); image left as is, document still compressed |
 | Output fails to reload or loses pages | `internal`, nothing stored |
@@ -114,3 +139,21 @@ Cancel latency (generated files, release build, cancel requested at 10–90% of 
 |---|---|---|
 | 24 × 12 MP JPEG photos, 160 MB, Balanced | 1.55 s (image pass 1.50 s) | 0.07–0.22 s |
 | 20,000 text pages, 86 MB, Lossless | 1.13 s (parse 0.04 s, streams 0.88 s, save 0.09 s) | 0.01–0.27 s |
+
+## Measured: images (Apple M-series, release build, 2026-10-08, ADR-0019)
+Non-private macOS system and app images, read-only (`measure_raster`):
+| File | Lossless | Balanced | Maximum | Metadata removed (lossless) |
+|---|---|---|---|---|
+| Wallpaper JPEG 3840×2160, 5,617.7 KB | −4.9% (0.52 s) | −81.5% (1.2 s) | −87.2% (1.2 s) | −5.0% |
+| Progressive JPEG 400×800, 72.9 KB | kept (encoding) | kept (not 2% smaller) | −10.6% | −0.3% |
+| Baseline JPEGs 256–800 px, 67–100 KB | −2.2…6.1% | −40.2…78.7% | −54.2…84.1% | −2.4…6.2% |
+| Screenshots PNG 1234×834–1602×844, 351–375 KB | −44.5…50.1% (0.5–1.0 s) | −45.4…52.8% (1.0–1.7 s) | −46.6…53.3% (1.5–2.2 s) | −44.7…50.1% |
+| App icons PNG 256×256–2048×2048, 51–2,383 KB | −5.4…34.0% (0.05–2.9 s) | −5.9…34.9% | −6.6…34.9% (up to 7.9 s) | −6.5…34.0% |
+| PNG named `.jpg`, 214×130, 70.4 KB | −0.8% | −1.2% | −2.0% | −2.9% |
+
+With Zopfli on every image, Maximum took 40–48 s per 1–2-megapixel PNG for 1–2.6% more than level 6 alone; it now
+runs only on rows up to 512 KiB (256×256 icons: 2.4–2.8 s, 0.6–0.9% smaller than level 6). Level 6 is not always
+smaller than level 4 (a 2048×2048 icon: +0.3 KB); both stay below the input. The engine detects formats by content:
+one `.jpg` in the set was a PNG and was optimized as one.
+
+Reproduce: `cargo run --release -p fileforge-core --example measure_raster -- <files>`.

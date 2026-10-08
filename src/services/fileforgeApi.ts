@@ -75,12 +75,45 @@ export interface PdfReport {
   editingDataRemoved: number;
 }
 
-/** Pipeline stages in the order the engine runs them; `images` only runs for lossy presets. */
-export type PdfStage = "loading" | "structure" | "images" | "streams" | "saving" | "verifying";
+/** How to compress JPEG and PNG files; see `crates/fileforge-core/src/raster/options.rs`. */
+export interface RasterOptions {
+  /** 30–95: re-encode JPEGs at this quality when that is at least 2% smaller. `null` keeps JPEG pixels exactly. */
+  jpegQuality: number | null;
+  /** oxipng level 0–6. PNGs are always lossless. */
+  pngLevel: number;
+  /** Finish small PNGs with Zopfli; omitted means false. */
+  pngZopfli?: boolean;
+  /** EXIF except orientation, XMP, IPTC, comments and text chunks; color profiles stay. Omitted means false. */
+  stripMetadata?: boolean;
+}
+
+export type RasterFormat = "jpeg" | "png";
+
+/** Why an image result is the original file byte for byte. */
+export type RasterKept = "notSmaller" | "extraData" | "signed" | "animated" | "unsupportedEncoding";
+
+export interface RasterReport {
+  format: RasterFormat;
+  width: number;
+  height: number;
+  originalSize: number;
+  outputSize: number;
+  /** Set when the result is the original file byte for byte. */
+  kept: RasterKept | null;
+  /** The JPEG was re-encoded at the requested quality; otherwise the pixels are exactly the original ones. */
+  reencoded: boolean;
+  metadataRemoved: boolean;
+}
+
+/**
+ * Pipeline stages in the order the engines run them. PDFs: `loading`, `structure`, `images` (lossy presets only),
+ * `streams`, `saving`, `verifying`. Images: `loading`, `encoding`, `verifying`.
+ */
+export type Stage = "loading" | "structure" | "images" | "streams" | "encoding" | "saving" | "verifying";
 
 /** `total: 0` means the stage is not counted; otherwise `done` grows from 0 to `total`. */
-export interface PdfProgress {
-  stage: PdfStage;
+export interface Progress {
+  stage: Stage;
   done: number;
   total: number;
 }
@@ -105,6 +138,9 @@ export type AppErrorCode =
   | "pdfEncrypted"
   | "pdfSigned"
   | "pdfMalformed"
+  | "imageTooLarge"
+  | "imageUnsupported"
+  | "imageMalformed"
   | "invalidOptions"
   | "cancelled"
   | "busy"
@@ -139,9 +175,15 @@ const fileforgeApi = {
    * Compresses into a temp result; the original is only read. `onProgress` receives throttled stage updates.
    * Rejects with `cancelled` after `cancelCompression`.
    */
-  compressPdf: (id: FileId, options: PdfOptions, onProgress: (progress: PdfProgress) => void = () => {}) => {
-    const channel = new Channel<PdfProgress>(onProgress);
+  compressPdf: (id: FileId, options: PdfOptions, onProgress: (progress: Progress) => void = () => {}) => {
+    const channel = new Channel<Progress>(onProgress);
     return invoke<PdfReport>("compress_pdf", { id, options, onProgress: channel });
+  },
+
+  /** Like `compressPdf`, for one JPEG or PNG; the format is detected from the content and kept. */
+  compressImage: (id: FileId, options: RasterOptions, onProgress: (progress: Progress) => void = () => {}) => {
+    const channel = new Channel<Progress>(onProgress);
+    return invoke<RasterReport>("compress_image", { id, options, onProgress: channel });
   },
 
   /** Stops every compression already started at its next checkpoint; a no-op when nothing runs. */
@@ -150,7 +192,7 @@ const fileforgeApi = {
   /** Native save dialog next to the original; resolves with the saved file name, or `null` when cancelled. */
   saveResult: (id: FileId) => invoke<string | null>("save_result", { id }),
 
-  /** Native folder picker; saves each result as `<name>-compressed.pdf` without overwriting. `null` when cancelled. */
+  /** Native folder picker; saves each result as `<name>-compressed.<ext>` without overwriting. `null` when cancelled. */
   saveResultsToFolder: (ids: FileId[]) => invoke<SavedFile[] | null>("save_results_to_folder", { ids }),
 
   /** Shows the last saved copy in the system file manager. */

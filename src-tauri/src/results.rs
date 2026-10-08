@@ -16,6 +16,8 @@ use crate::file_registry::FileId;
 pub struct StoredResult {
     pub temp_path: PathBuf,
     pub saved_path: Option<PathBuf>,
+    /// File extension of the result's format, without the dot: `pdf`, `jpg`, `jpeg` or `png`.
+    pub extension: &'static str,
 }
 
 pub struct ResultStore {
@@ -36,10 +38,16 @@ impl ResultStore {
         Ok(Self { dir, results: Mutex::default(), work: Mutex::default() })
     }
 
-    pub fn put(&self, id: FileId, bytes: &[u8]) -> io::Result<()> {
-        let temp_path = self.dir.join(format!("{id}.pdf"));
+    pub fn put(&self, id: FileId, bytes: &[u8], extension: &'static str) -> io::Result<()> {
+        let temp_path = self.dir.join(format!("{id}.{extension}"));
         write_atomically(&temp_path, |file| file.write_all(bytes), |tmp| fs::rename(tmp, &temp_path))?;
-        self.lock().insert(id, StoredResult { temp_path, saved_path: None });
+        // A new result of another format replaces the old one under a different temp name.
+        if let Some(previous) =
+            self.lock().insert(id, StoredResult { temp_path: temp_path.clone(), saved_path: None, extension })
+            && previous.temp_path != temp_path
+        {
+            let _ = fs::remove_file(previous.temp_path);
+        }
         Ok(())
     }
 
@@ -90,10 +98,10 @@ impl ResultStore {
     }
 }
 
-/// `report.pdf` → `report-compressed.pdf`.
-pub fn output_name(input_name: &str) -> String {
+/// `report.pdf` → `report-compressed.pdf`, with the result's extension.
+pub fn output_name(input_name: &str, extension: &str) -> String {
     let stem = Path::new(input_name).file_stem().map_or_else(|| "document".into(), |s| s.to_string_lossy());
-    format!("{stem}-compressed.pdf")
+    format!("{stem}-compressed.{extension}")
 }
 
 /// `dir/name`, or `dir/name (2)`, `(3)`… when taken, so saving a batch never overwrites existing files.
@@ -184,7 +192,7 @@ mod tests {
     fn concurrent_batch_saves_never_overwrite_each_other() {
         let dir = tempfile::tempdir().expect("temp dir");
         let store = ResultStore::open(dir.path().join("results")).expect("store");
-        store.put(1, b"%PDF-new").expect("result");
+        store.put(1, b"%PDF-new", "pdf").expect("result");
         let stored = store.get(1).expect("result");
         let existing = dir.path().join("out.pdf");
         fs::write(&existing, b"keep existing").expect("existing file");
@@ -224,9 +232,10 @@ mod tests {
 
     #[test]
     fn output_names_keep_the_stem() {
-        assert_eq!(output_name("Annual report.pdf"), "Annual report-compressed.pdf");
-        assert_eq!(output_name("scan.PDF"), "scan-compressed.pdf");
-        assert_eq!(output_name("no-extension"), "no-extension-compressed.pdf");
+        assert_eq!(output_name("Annual report.pdf", "pdf"), "Annual report-compressed.pdf");
+        assert_eq!(output_name("scan.PDF", "pdf"), "scan-compressed.pdf");
+        assert_eq!(output_name("no-extension", "pdf"), "no-extension-compressed.pdf");
+        assert_eq!(output_name("IMG_0001.JPG", "jpg"), "IMG_0001-compressed.jpg");
     }
 
     #[test]
@@ -246,7 +255,7 @@ mod tests {
     fn batch_saving_skips_broken_symbolic_links() {
         let dir = tempfile::tempdir().expect("temp dir");
         let store = ResultStore::open(dir.path().join("results")).expect("store");
-        store.put(1, b"%PDF-new").expect("result");
+        store.put(1, b"%PDF-new", "pdf").expect("result");
         let stored = store.get(1).expect("result");
         let taken = dir.path().join("out.pdf");
         let missing = dir.path().join("missing.pdf");
@@ -276,7 +285,7 @@ mod tests {
     fn results_are_stored_copied_and_removed() {
         let dir = tempfile::tempdir().expect("temp dir");
         let store = ResultStore::open(dir.path().join("results")).expect("opens");
-        store.put(1, b"%PDF-small").expect("stores");
+        store.put(1, b"%PDF-small", "pdf").expect("stores");
         let stored = store.get(1).expect("present");
         assert_eq!(fs::read(&stored.temp_path).expect("temp file"), b"%PDF-small");
 
@@ -313,8 +322,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("temp dir");
         let store = ResultStore::open(dir.path().join("results")).expect("opens");
         assert_eq!(store.unsaved_count(), 0);
-        store.put(1, b"%PDF-1").expect("stores");
-        store.put(2, b"%PDF-2").expect("stores");
+        store.put(1, b"%PDF-1", "pdf").expect("stores");
+        store.put(2, b"%PDF-2", "pdf").expect("stores");
         assert_eq!(store.unsaved_count(), 2);
         store.mark_saved(1, dir.path().join("1.pdf"));
         assert_eq!(store.unsaved_count(), 1);
@@ -325,7 +334,7 @@ mod tests {
     #[test]
     fn a_failed_copy_leaves_nothing_behind() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let missing = StoredResult { temp_path: dir.path().join("gone.pdf"), saved_path: None };
+        let missing = StoredResult { temp_path: dir.path().join("gone.pdf"), saved_path: None, extension: "pdf" };
         let target = dir.path().join("out.pdf");
 
         assert!(copy_result(&missing, &target).is_err());

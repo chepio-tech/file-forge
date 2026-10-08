@@ -3,6 +3,7 @@
 
 // Core
 use fileforge_core::pdf::PdfError;
+use fileforge_core::raster::RasterError;
 use serde::Serialize;
 // Types
 use crate::file_registry::FileId;
@@ -30,6 +31,14 @@ pub enum AppError {
     PdfSigned,
     #[error("not a readable PDF: {0}")]
     PdfMalformed(String),
+    /// The image file or its pixel count exceeds the engine's limits; `detail` names which.
+    #[error("the image is too large: {0}")]
+    ImageTooLarge(String),
+    /// Not a JPEG or PNG by content; `detail` names the format when known (e.g. "WebP").
+    #[error("unsupported image format: {0}")]
+    ImageUnsupported(String),
+    #[error("not a readable image: {0}")]
+    ImageMalformed(String),
     #[error("invalid options: {0}")]
     InvalidOptions(String),
     /// The user cancelled the compression; nothing was stored.
@@ -61,6 +70,20 @@ impl From<PdfError> for AppError {
             PdfError::InvalidOptions(detail) => Self::InvalidOptions(detail),
             PdfError::Cancelled => Self::Cancelled,
             PdfError::Internal(detail) => Self::Internal(detail),
+        }
+    }
+}
+
+impl From<RasterError> for AppError {
+    fn from(error: RasterError) -> Self {
+        match error {
+            RasterError::TooLarge { limit } => Self::ImageTooLarge(format!("{limit} bytes")),
+            RasterError::TooManyPixels { limit } => Self::ImageTooLarge(format!("{limit} pixels")),
+            RasterError::Unsupported(format) => Self::ImageUnsupported(format),
+            RasterError::Malformed(detail) => Self::ImageMalformed(detail),
+            RasterError::InvalidOptions(detail) => Self::InvalidOptions(detail),
+            RasterError::Cancelled => Self::Cancelled,
+            RasterError::Internal(detail) => Self::Internal(detail),
         }
     }
 }
@@ -111,5 +134,14 @@ mod tests {
         assert!(matches!(AppError::from(PdfError::TooLarge { limit: 5 }), AppError::PdfTooLarge(5)));
         assert!(matches!(AppError::from(PdfError::Malformed("x".into())), AppError::PdfMalformed(d) if d == "x"));
         assert!(matches!(AppError::from(PdfError::Cancelled), AppError::Cancelled));
+        assert!(
+            matches!(AppError::from(RasterError::TooManyPixels { limit: 9 }), AppError::ImageTooLarge(d) if d == "9 pixels")
+        );
+        assert!(
+            matches!(AppError::from(RasterError::Unsupported("WebP".into())), AppError::ImageUnsupported(d) if d == "WebP")
+        );
+        assert!(matches!(AppError::from(RasterError::Cancelled), AppError::Cancelled));
+        let json = serde_json::to_value(AppError::ImageMalformed("x".into())).ok();
+        assert_eq!(json, Some(serde_json::json!({ "code": "imageMalformed", "detail": "x" })));
     }
 }

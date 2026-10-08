@@ -1,10 +1,10 @@
-.pdf-compress__files {
+.compression-panel__files {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.pdf-compress__summary {
+.compression-panel__summary {
   display: flex;
   justify-content: space-between;
   gap: var(--space-3);
@@ -14,19 +14,19 @@
   font-weight: 500;
 }
 
-.pdf-compress__total {
+.compression-panel__total {
   font-variant-numeric: tabular-nums;
 }
 
-/* Settings */
+/* Settings sections of the tools */
 
-.pdf-settings {
+.compression-settings {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.pdf-settings__row {
+.compression-settings__row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -34,70 +34,29 @@
   gap: var(--space-3);
 }
 
-.pdf-settings__fields {
+.compression-settings__fields {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
 }
 
-.pdf-settings__hint {
+.compression-settings__hint {
   max-width: 72ch;
   margin: 0;
   color: var(--ink-muted);
   font-size: var(--text-sm);
 }
 
-.pdf-settings__removal {
+.compression-settings__options {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3) var(--space-6);
   padding-top: var(--space-1);
 }
 
-/* Per-file status */
-
-.pdf-job {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.pdf-job--muted {
-  color: var(--ink-muted);
-}
-
-.pdf-job--error {
-  display: inline-block;
-  max-width: 22rem;
-  overflow: hidden;
-  color: var(--danger);
-  text-overflow: ellipsis;
-}
-
-.pdf-job__result {
-  font-weight: 500;
-}
-
-.pdf-job__reduction {
-  min-width: 3.25rem;
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--success) 14%, transparent);
-  color: var(--success);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  text-align: center;
-}
-
-.pdf-job__saved {
-  color: var(--accent);
-}
-
 /* Action bar */
 
-.pdf-compress__actions {
+.compression-panel__actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -106,7 +65,7 @@
   background: var(--surface-sunken);
 }
 
-.pdf-compress__outcome {
+.compression-panel__outcome {
   display: flex;
   flex: 1;
   align-items: center;
@@ -115,11 +74,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-.pdf-compress__outcome-sizes {
+.compression-panel__outcome-sizes {
   font-weight: 600;
 }
 
-.pdf-compress__outdated {
+.compression-panel__outdated {
   overflow: hidden;
   color: var(--warning-ink);
   text-overflow: ellipsis;

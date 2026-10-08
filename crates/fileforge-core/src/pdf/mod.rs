@@ -8,7 +8,6 @@
 //! Every stage reports progress and checks for cancellation through a [`Control`].
 
 mod cff;
-mod control;
 mod dedupe;
 mod error;
 mod fonts;
@@ -28,7 +27,7 @@ use lopdf::xref::XrefType;
 use lopdf::{Document, LoadOptions, SaveOptions};
 use serde::Serialize;
 
-pub use control::{Control, Progress, Stage};
+pub use crate::control::{Control, Progress, Stage};
 pub use error::PdfError;
 pub use limits::MAX_INPUT_BYTES;
 pub use options::{ImageOptions, JPEG_QUALITY_RANGE, MAX_DPI_RANGE, PdfOptions};

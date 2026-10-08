@@ -7,8 +7,8 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use lopdf::{Document, Object, Stream};
 // Domain
-use super::control::{Control, Counter, Stage};
 use super::objects::filters;
+use crate::control::{Control, Counter, Stage};
 
 /// Compresses unfiltered streams and re-deflates Flate streams (without predictors) when that makes them smaller.
 /// Decoded content never changes. XMP metadata stays uncompressed so other tools (and PDF/A) can read it.

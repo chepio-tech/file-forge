@@ -6,8 +6,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use lopdf::{Document, Object, ObjectId};
 // Domain
 use super::cff;
-use super::control::Control;
 use super::objects::dict_name;
+use crate::control::Control;
 
 /// Rewrites every bare CFF font program (`FontFile3` with `Subtype` `Type1C` or `CIDFontType0C`) that can be pruned
 /// and verified; returns how many. Stops early when cancelled; the caller then discards the document.

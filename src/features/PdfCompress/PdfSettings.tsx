@@ -29,8 +29,8 @@ function PdfSettings({ preset, options, disabled, onPreset, onCustom, onOptions 
     : messages.pdf.losslessHint;
 
   return (
-    <section className="pdf-settings" aria-label={messages.pdf.settings}>
-      <div className="pdf-settings__row">
+    <section className="compression-settings" aria-label={messages.pdf.settings}>
+      <div className="compression-settings__row">
         <SegmentedControl
           label={messages.pdf.settings}
           options={PRESET_IDS.map((id) => ({ value: id, label: messages.pdf.presets[id] }))}
@@ -38,7 +38,7 @@ function PdfSettings({ preset, options, disabled, onPreset, onCustom, onOptions 
           onChange={onPreset}
           disabled={disabled}
         />
-        <div className="pdf-settings__fields">
+        <div className="compression-settings__fields">
           <NumberField
             label={messages.pdf.jpegQuality}
             value={options.images ? lossy.jpegQuality : null}
@@ -60,12 +60,12 @@ function PdfSettings({ preset, options, disabled, onPreset, onCustom, onOptions 
           />
         </div>
       </div>
-      <p className="pdf-settings__hint">
+      <p className="compression-settings__hint">
         {hint}
         {options.images?.compressFlatePhotos && ` ${messages.pdf.flatePhotosHint}`}
         {preset === "screen" && ` ${messages.pdf.screenHint}`}
       </p>
-      <div className="pdf-settings__removal">
+      <div className="compression-settings__options">
         <Checkbox
           label={messages.pdf.stripMetadata}
           hint={messages.pdf.stripMetadataHint}
