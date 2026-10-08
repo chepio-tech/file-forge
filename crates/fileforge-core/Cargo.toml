@@ -8,9 +8,8 @@ authors.workspace = true
 
 [dependencies]
 flate2 = "1.1"
-# Pinned to a commit: 0.4.0 on crates.io blurs irreversible (9/7) images (fixed upstream in #1340, unreleased).
-# Switch back to a crates.io version once one includes that fix.
-hayro-jpeg2000 = { git = "https://github.com/LaurenzV/hayro", rev = "ced00dd082e6a7eda8561d4ac0f7fc3828af2ac7", default-features = false, features = ["std", "simd"] }
+# At least 0.4.1: 0.4.0 blurs irreversible (9/7) images (upstream fix #1340, ADR-0015).
+hayro-jpeg2000 = { version = "0.4.1", default-features = false, features = ["std", "simd"] }
 # Resizing only. JPEG decoding uses jpeg-decoder: zune-jpeg 0.5.15 (image's JPEG backend) misdecodes the JPEGs
 # jpeg-encoder writes with optimized Huffman tables, which corrupted files compressed a second time (ADR-0015).
 image = { version = "0.25", default-features = false }

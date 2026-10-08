@@ -37,9 +37,10 @@ in `crates/fileforge-core/tests/pdf_compress.rs`.
 
 Image decoders read attacker-controlled bytes, so they are memory-safe Rust (ADR-0015). `jpeg-decoder` runs with
 `platform_independent` (no unsafe code). `hayro-jpeg2000` forbids unsafe code itself; its SIMD comes from
-`fearless_simd`. It is pinned to a reviewed git commit, so Dependabot does not update it. JPEG 2000 images are
-checked against the dictionary and the sample limit before decoding, and a panic inside that decoder only skips
-the image. Broken codestreams are fuzzed in the `pdf::jpx` unit tests.
+`fearless_simd`. It comes from crates.io (at least 0.4.1, ADR-0015); Dependabot updates must keep the `pdf::jpx`
+OpenJPEG comparison test passing. JPEG 2000 images are checked against the dictionary and the sample limit before
+decoding, and a panic inside that decoder only skips the image. Broken codestreams are fuzzed in the `pdf::jpx` unit
+tests.
 
 Flate photograph conversion (ADR-0016) validates predictor layout before invoking the bounded stream decoder;
 unsupported/ambiguous parameters are skipped. Its screen-content scan allocates only a fixed histogram, inspects
