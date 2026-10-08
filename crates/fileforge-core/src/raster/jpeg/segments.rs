@@ -163,7 +163,7 @@ impl Frame {
             return Err(malformed("bad frame component count"));
         }
         let components: Vec<Component> =
-            rest.chunks_exact(3).map(|c| Component { id: c[0], h: c[1] >> 4, v: c[1] & 0x0F }).collect();
+            rest.as_chunks::<3>().0.iter().map(|c| Component { id: c[0], h: c[1] >> 4, v: c[1] & 0x0F }).collect();
         if components.iter().any(|c| !(1..=4).contains(&c.h) || !(1..=4).contains(&c.v)) {
             return Err(malformed("bad sampling factor"));
         }

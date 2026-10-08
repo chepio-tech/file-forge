@@ -98,7 +98,7 @@ impl Scan {
             return Err(malformed("not a sequential scan"));
         }
         let mut components = Vec::with_capacity(count);
-        for pair in rest[..count * 2].chunks_exact(2) {
+        for pair in rest[..count * 2].as_chunks::<2>().0 {
             let index = layout
                 .components
                 .iter()

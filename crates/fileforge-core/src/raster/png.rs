@@ -199,7 +199,7 @@ fn decode_rows(input: &[u8], limits: &Limits) -> Result<DecodedRows, RasterError
         let t = trns?;
         if wide {
             (t.len() >= samples * 2)
-                .then(|| t.chunks_exact(2).take(samples).map(|b| u16::from_be_bytes([b[0], b[1]])).collect())
+                .then(|| t.as_chunks::<2>().0.iter().take(samples).map(|&b| u16::from_be_bytes(b)).collect())
         } else {
             (t.len() >= samples).then(|| t[..samples].iter().map(|&b| u16::from(b)).collect())
         }
@@ -211,7 +211,9 @@ fn decode_rows(input: &[u8], limits: &Limits) -> Result<DecodedRows, RasterError
             let palette = info.palette.as_deref().ok_or_else(|| malformed("indexed image without palette"))?;
             ColorType::Indexed {
                 palette: palette
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .enumerate()
                     .map(|(i, rgb)| {
                         RGBA8::new(rgb[0], rgb[1], rgb[2], trns.and_then(|t| t.get(i)).copied().unwrap_or(255))
