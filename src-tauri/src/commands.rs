@@ -97,7 +97,7 @@ pub async fn compress_pdf(
     .await?
 }
 
-/// Compresses one registered JPEG or PNG into a temp result, like `compress_pdf`. The format comes from the file's
+/// Compresses one registered JPEG, PNG or WebP into a temp result, like `compress_pdf`. The format comes from the file's
 /// content; the result keeps it.
 #[tauri::command]
 pub async fn compress_image(
@@ -133,6 +133,7 @@ fn image_extension(name: &str, format: RasterFormat) -> &'static str {
         RasterFormat::Jpeg if original.as_deref() == Some("jpeg") => "jpeg",
         RasterFormat::Jpeg => "jpg",
         RasterFormat::Png => "png",
+        RasterFormat::Webp => "webp",
     }
 }
 
@@ -141,6 +142,7 @@ fn dialog_filter(extension: &str) -> (&'static str, &'static [&'static str]) {
     match extension {
         "jpg" | "jpeg" => ("JPEG", &["jpg", "jpeg"]),
         "png" => ("PNG", &["png"]),
+        "webp" => ("WebP", &["webp"]),
         _ => ("PDF", &["pdf"]),
     }
 }
@@ -297,7 +299,9 @@ mod tests {
         assert_eq!(image_extension("IMG_1.JPG", RasterFormat::Jpeg), "jpg");
         assert_eq!(image_extension("preview.jpg", RasterFormat::Png), "png");
         assert_eq!(image_extension("no-extension", RasterFormat::Png), "png");
+        assert_eq!(image_extension("Sticker.WEBP", RasterFormat::Webp), "webp");
         assert_eq!(dialog_filter("jpeg"), ("JPEG", &["jpg", "jpeg"][..]));
+        assert_eq!(dialog_filter("webp"), ("WebP", &["webp"][..]));
         assert_eq!(dialog_filter("pdf"), ("PDF", &["pdf"][..]));
     }
 }

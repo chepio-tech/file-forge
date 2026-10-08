@@ -1,0 +1,26 @@
+[package]
+name = "fileforge-webp"
+description = "Safe, encode-only libwebp wrapper for FileForge: the workspace's only crate with unsafe code (ADR-0020)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+# libwebp 1.6.0, compiled from source with cc. Only its encoder is called: untrusted files are decoded by
+# image-webp (safe Rust) in fileforge-core.
+libwebp-sys = "0.14.4"
+thiserror.workspace = true
+
+[dev-dependencies]
+image-webp = "0.2.4"
+
+# Not the workspace lints: they forbid unsafe code, which this crate exists to contain. Every unsafe block states
+# why it is sound, and holds one unsafe operation so each claim covers exactly one call.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+unwrap_used = "warn"

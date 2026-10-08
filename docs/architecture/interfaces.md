@@ -28,21 +28,22 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
   `streams`, `saving`, `verifying`; `total: 0` = not counted), throttled to stage changes, stage completion and one
   update per 100 ms.
   Progress may arrive after the command settles; the UI ignores it then (ADR-0011).
-- `compress_image(id, options, onProgress)` → `RasterReport` (ADR-0019). Options:
-  `{ jpegQuality: 30–95 | null, pngLevel: 0–6, pngZopfli?, stripMetadata? }`; `jpegQuality: null` keeps JPEG pixels
-  exactly, the two flags default to `false`. Ranges are defined and validated in
-  `crates/fileforge-core/src/raster/options.rs`; the UI mirrors them in `src/features/ImageCompress/imagePresets.ts`.
-  The report: `{ format: "jpeg" | "png", width, height, originalSize, outputSize, kept, reencoded, metadataRemoved }`;
-  `kept` is `null` for a new result, otherwise why the original stays: `notSmaller`, `extraData`, `signed`,
-  `animated` or `unsupportedEncoding`. Progress stages: `loading`, `encoding`, `verifying`. The format comes from the
-  file's content, and the result keeps it.
+- `compress_image(id, options, onProgress)` → `RasterReport` (ADR-0019, ADR-0020). Options:
+  `{ jpegQuality: 30–95 | null, webpQuality?: 30–95 | null, pngLevel: 0–6, pngZopfli?, stripMetadata? }`; a `null`
+  quality keeps that format's pixels exactly (lossless WebPs always stay lossless), omitted `webpQuality` means `null`,
+  the two flags default to `false`. Ranges are defined and validated in `crates/fileforge-core/src/raster/options.rs`;
+  the UI mirrors them in `src/features/ImageCompress/imagePresets.ts`.
+  The report: `{ format: "jpeg" | "png" | "webp", width, height, originalSize, outputSize, kept, reencoded,
+  metadataRemoved }`; `kept` is `null` for a new result, otherwise why the original stays: `notSmaller`, `extraData`,
+  `signed`, `animated`, `unsupportedEncoding` or `lossyEncoding` (a lossy WebP and no WebP quality). Progress stages:
+  `loading`, `encoding`, `verifying`. The format comes from the file's content, and the result keeps it.
 - `cancel_compression` — cancels every compression (PDF or image) already started at its next checkpoint; those reject with
   `cancelled`. Later calls are unaffected; a no-op when nothing runs.
 - `save_result(id)` — native save dialog next to the original, filtered to the result's format → saved file name,
   or `null` if cancelled.
   Choosing any session input (including aliases, macOS case variants and files removed from the list) returns `originalTarget`.
 - `save_results_to_folder(ids)` — folder picker, `<name>-compressed.<ext>` without overwriting → `SavedFile[]` or
-  `null`. `<ext>` is `pdf`, `png`, or `jpg` (`jpeg` when the original used it).
+  `null`. `<ext>` is `pdf`, `png`, `webp`, or `jpg` (`jpeg` when the original used it).
 - `reveal_result(id)` — show the last saved copy in the file manager.
 - `check_for_update` → `{ currentVersion, availableVersion | null }`; remembers the found update in Rust (ADR-0013).
 - `install_update(discardUnsaved)` — downloads, verifies and installs the update found by the last check, then
@@ -54,7 +55,7 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 - The UI also listens to the webview's drag-enter/leave events for hover feedback only (paths ignored).
 
 Error codes: `unknownFile`, `noResult`, `originalTarget`, `notAFile`, `pdfTooLarge`, `pdfEncrypted`, `pdfSigned`, `pdfMalformed`,
-`imageTooLarge` (bytes or pixels, named in `detail`), `imageUnsupported` (not JPEG or PNG by content; `detail` names the
+`imageTooLarge` (bytes or pixels, named in `detail`), `imageUnsupported` (not JPEG, PNG or WebP by content; `detail` names the
 format when known), `imageMalformed`,
 `invalidOptions`, `cancelled`, `busy`, `unsavedResults`, `update`, `io`, `internal`.
 

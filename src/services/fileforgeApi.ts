@@ -75,10 +75,12 @@ export interface PdfReport {
   editingDataRemoved: number;
 }
 
-/** How to compress JPEG and PNG files; see `crates/fileforge-core/src/raster/options.rs`. */
+/** How to compress JPEG, PNG and WebP files; see `crates/fileforge-core/src/raster/options.rs`. */
 export interface RasterOptions {
   /** 30–95: re-encode JPEGs at this quality when that is at least 2% smaller. `null` keeps JPEG pixels exactly. */
   jpegQuality: number | null;
+  /** 30–95: re-encode lossy WebPs likewise. `null` keeps their pixels; lossless WebPs always stay lossless. */
+  webpQuality: number | null;
   /** oxipng level 0–6. PNGs are always lossless. */
   pngLevel: number;
   /** Finish small PNGs with Zopfli; omitted means false. */
@@ -87,10 +89,10 @@ export interface RasterOptions {
   stripMetadata?: boolean;
 }
 
-export type RasterFormat = "jpeg" | "png";
+export type RasterFormat = "jpeg" | "png" | "webp";
 
 /** Why an image result is the original file byte for byte. */
-export type RasterKept = "notSmaller" | "extraData" | "signed" | "animated" | "unsupportedEncoding";
+export type RasterKept = "notSmaller" | "extraData" | "signed" | "animated" | "unsupportedEncoding" | "lossyEncoding";
 
 export interface RasterReport {
   format: RasterFormat;
@@ -100,7 +102,7 @@ export interface RasterReport {
   outputSize: number;
   /** Set when the result is the original file byte for byte. */
   kept: RasterKept | null;
-  /** The JPEG was re-encoded at the requested quality; otherwise the pixels are exactly the original ones. */
+  /** Re-encoded at the requested JPEG or WebP quality; otherwise the pixels are exactly the original ones. */
   reencoded: boolean;
   metadataRemoved: boolean;
 }
@@ -180,7 +182,7 @@ const fileforgeApi = {
     return invoke<PdfReport>("compress_pdf", { id, options, onProgress: channel });
   },
 
-  /** Like `compressPdf`, for one JPEG or PNG; the format is detected from the content and kept. */
+  /** Like `compressPdf`, for one JPEG, PNG or WebP; the format is detected from the content and kept. */
   compressImage: (id: FileId, options: RasterOptions, onProgress: (progress: Progress) => void = () => {}) => {
     const channel = new Channel<Progress>(onProgress);
     return invoke<RasterReport>("compress_image", { id, options, onProgress: channel });

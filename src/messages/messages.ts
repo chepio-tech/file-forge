@@ -24,7 +24,8 @@ const messages = {
     imageCompress: {
       nav: "Compress",
       title: "Compress images",
-      description: "Recodes JPEG and PNG files without changing a pixel, and optionally re-encodes JPEGs.",
+      description:
+        "Recodes JPEG, PNG and WebP files without changing a pixel, and optionally re-encodes JPEGs and lossy WebPs.",
     },
     imageConvert: { nav: "Convert", title: "Convert images" },
     videoCompress: { nav: "Compress", title: "Compress video" },
@@ -122,15 +123,20 @@ const messages = {
   image: {
     settings: "Compression",
     presets: { lossless: "Lossless", balanced: "Balanced", maximum: "Maximum", custom: "Custom" },
-    /** `quality: null` keeps JPEG pixels exactly. */
-    hint: (quality: number | null, pngLevel: number, zopfli: boolean) =>
+    /** A `null` quality keeps that format's pixels exactly. */
+    hint: (quality: number | null, webpQuality: number | null, pngLevel: number, zopfli: boolean) =>
       [
         quality === null
           ? "JPEG pixels stay bit-identical: only the coding gets smaller."
           : `JPEGs are re-encoded at quality ${quality} when that saves at least 2%.`,
+        webpQuality === null
+          ? "Lossy WebPs keep their pixels."
+          : `Lossy WebPs are re-encoded at quality ${webpQuality} when that saves at least 2%.`,
+        "Lossless WebPs stay lossless.",
         `PNGs stay lossless at effort ${pngLevel} of 6${zopfli ? ", with Zopfli for small images" : ""}.`,
       ].join(" "),
     jpegQuality: "JPEG quality",
+    webpQuality: "WebP quality",
     pngLevel: "PNG effort",
     keepPixels: "Keep",
     stripMetadata: "Remove metadata",
@@ -138,10 +144,11 @@ const messages = {
     kept: {
       extraData: "Kept as is: contains extra images, such as an HDR gain map",
       signed: "Kept as is: signed with Content Credentials",
-      animated: "Kept as is: animated PNG",
-      unsupportedEncoding: "Kept as is: this JPEG's encoding cannot be rewritten losslessly",
+      animated: "Kept as is: animated image",
+      unsupportedEncoding: "Kept as is: this image's encoding cannot be rewritten losslessly",
+      lossyEncoding: "Kept as is: lossy WebP without a WebP quality",
     },
-    formats: { jpeg: "JPEG", png: "PNG" },
+    formats: { jpeg: "JPEG", png: "PNG", webp: "WebP" },
     details: (format: string, width: number, height: number, reencoded: boolean, metadataRemoved: boolean) =>
       [
         `${format} ${width}×${height}`,
@@ -172,8 +179,8 @@ const messages = {
     pdfSigned: "Digitally signed PDF. Compressing would invalidate the signature, so it was skipped.",
     pdfMalformed: "This file is damaged or not a valid PDF.",
     imageTooLarge: "This image is larger than the 256 MB or 120-megapixel limit.",
-    imageUnsupported: "Only JPEG and PNG images can be compressed. This file is in another format.",
-    imageMalformed: "This file is damaged or not a valid JPEG or PNG image.",
+    imageUnsupported: "Only JPEG, PNG and WebP images can be compressed. This file is in another format.",
+    imageMalformed: "This file is damaged or not a valid JPEG, PNG or WebP image.",
     invalidOptions: "These settings are out of range.",
     cancelled: "Compression was cancelled.",
     busy: "Wait until the current compression or save finishes, then try again.",

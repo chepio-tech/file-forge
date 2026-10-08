@@ -1,8 +1,9 @@
-//! Image compression engine for JPEG and PNG files (plan 0014, ADR-0019).
+//! Image compression engine for JPEG, PNG and WebP files (plan 0014, ADR-0019, ADR-0020).
 //!
 //! Pipeline: refuse oversized files → detect the format by content → refuse more pixels than the limit → keep files
 //! whose bytes must not change (signed, animated, extra data after the image) → decode in safe Rust → build
-//! candidates (JPEG: lossless transcode, lossy re-encode; PNG: oxipng) → decode each candidate again to verify →
+//! candidates (JPEG: lossless transcode, lossy re-encode; PNG: oxipng; WebP: libwebp lossless, or lossy re-encode of
+//! lossy files) → decode each candidate again to verify →
 //! use the smallest valid candidate only if it is smaller than the file, otherwise return the original bytes.
 //! Every stage reports progress and checks for cancellation through a [`Control`].
 
@@ -12,6 +13,7 @@ mod jpeg;
 mod limits;
 mod options;
 mod png;
+mod webp;
 
 // Core
 use serde::Serialize;
@@ -19,7 +21,7 @@ use serde::Serialize;
 pub use crate::control::{Control, Progress, Stage};
 pub use error::RasterError;
 pub use limits::MAX_INPUT_BYTES;
-pub use options::{JPEG_QUALITY_RANGE, PNG_LEVEL_RANGE, RasterOptions};
+pub use options::{JPEG_QUALITY_RANGE, PNG_LEVEL_RANGE, RasterOptions, WEBP_QUALITY_RANGE};
 
 // Domain
 use limits::Limits;
@@ -30,15 +32,18 @@ use limits::Limits;
 pub enum RasterFormat {
     Jpeg,
     Png,
+    Webp,
 }
 
 impl RasterFormat {
-    /// Recognizes JPEG and PNG by their signatures, never by extension.
+    /// Recognizes JPEG, PNG and WebP by their signatures, never by extension.
     pub fn detect(input: &[u8]) -> Option<Self> {
         if input.starts_with(&[0xFF, 0xD8, 0xFF]) {
             Some(Self::Jpeg)
         } else if input.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
             Some(Self::Png)
+        } else if input.get(..4) == Some(b"RIFF") && input.get(8..12) == Some(b"WEBP") {
+            Some(Self::Webp)
         } else {
             None
         }
@@ -55,10 +60,13 @@ pub enum Kept {
     ExtraData,
     /// Content Credentials (C2PA) or a digital signature cover the file's bytes.
     Signed,
-    /// Animated PNG.
+    /// Animated PNG or WebP.
     Animated,
-    /// A JPEG coding the engine does not rewrite: arithmetic, lossless, hierarchical, or not strictly readable.
+    /// A coding the engine does not rewrite: arithmetic, lossless, hierarchical or not strictly readable JPEGs, and
+    /// WebPs whose header denies the transparency their image data has.
     UnsupportedEncoding,
+    /// A lossy WebP and no WebP quality: its pixels stay, and there is no lossless way to recode them.
+    LossyEncoding,
 }
 
 /// What the engine did, shown to the user next to the file.
@@ -72,7 +80,8 @@ pub struct RasterReport {
     pub output_size: u64,
     /// Set when the output is the original file byte for byte.
     pub kept: Option<Kept>,
-    /// The pixels were re-encoded with the requested JPEG quality; otherwise they are exactly the original ones.
+    /// The pixels were re-encoded with the requested JPEG or WebP quality; otherwise they are exactly the original
+    /// ones.
     pub reencoded: bool,
     /// Metadata was removed (only with `strip_metadata`).
     pub metadata_removed: bool,
@@ -98,7 +107,7 @@ pub(crate) struct Outcome {
     kept: Kept,
 }
 
-/// Compresses a JPEG or PNG held in memory. Never returns something larger than `input`.
+/// Compresses a JPEG, PNG or WebP held in memory. Never returns something larger than `input`.
 pub fn compress(input: &[u8], options: &RasterOptions) -> Result<RasterOutput, RasterError> {
     compress_controlled(input, options, &())
 }
@@ -132,6 +141,7 @@ pub(crate) fn compress_with_limits(
     let outcome = match format {
         RasterFormat::Jpeg => jpeg::compress(input, options, limits, control)?,
         RasterFormat::Png => png::compress(input, options, limits, control)?,
+        RasterFormat::Webp => webp::compress(input, options, limits, control)?,
     };
     let (width, height) = outcome.size;
     let report = RasterReport {
@@ -161,9 +171,7 @@ pub(crate) fn compress_with_limits(
 
 /// A short name for formats the engine recognizes but does not compress (yet), for the error detail.
 fn describe(input: &[u8]) -> &'static str {
-    if input.get(..4) == Some(b"RIFF") && input.get(8..12) == Some(b"WEBP") {
-        "WebP"
-    } else if input.get(4..12).is_some_and(|brand| brand.starts_with(b"ftyp")) {
+    if input.get(4..12).is_some_and(|brand| brand.starts_with(b"ftyp")) {
         "HEIF/AVIF"
     } else if input.starts_with(b"GIF8") {
         "GIF"
@@ -202,8 +210,12 @@ mod tests {
             let written = encoder.write_header().and_then(|mut writer| writer.write_image_data(&pixels));
             assert!(written.is_ok());
         }
+        let rgb = vec![128; 64 * 48 * 3];
+        let lossless = fileforge_webp::Mode::Lossless { level: 0 };
+        let webp = fileforge_webp::encode(&rgb, 64, 48, fileforge_webp::Layout::Rgb, lossless, &|| false)
+            .expect("test WebP encodes");
         let limits = Limits { max_pixels: 64 * 48 - 1, ..Limits::DEFAULT };
-        for input in [jpeg, png] {
+        for input in [jpeg, png, webp] {
             let result = compress_with_limits(&input, &RasterOptions::LOSSLESS, &limits, &());
             assert_eq!(result.map(|output| output.report), Err(RasterError::TooManyPixels { limit: 64 * 48 - 1 }));
         }
@@ -211,10 +223,9 @@ mod tests {
 
     #[test]
     fn other_formats_are_named_in_the_error() {
-        let webp = b"RIFF\x10\0\0\0WEBPVP8 ";
-        assert_eq!(compress(webp, &RasterOptions::LOSSLESS), Err(RasterError::Unsupported("WebP".into())));
         let heic = b"\0\0\0\x18ftypheic\0\0\0\0";
         assert_eq!(compress(heic, &RasterOptions::LOSSLESS), Err(RasterError::Unsupported("HEIF/AVIF".into())));
+        assert_eq!(compress(b"GIF89a\x01\0", &RasterOptions::LOSSLESS), Err(RasterError::Unsupported("GIF".into())));
         assert_eq!(compress(b"%PDF-1.7", &RasterOptions::LOSSLESS), Err(RasterError::Unsupported("unknown".into())));
     }
 }

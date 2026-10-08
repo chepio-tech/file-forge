@@ -1,5 +1,5 @@
-//! Measures the image engine on real JPEG and PNG files without modifying them:
-//! `cargo run --release -p fileforge-core --example measure_raster -- a.jpg b.png`
+//! Measures the image engine on real JPEG, PNG and WebP files without modifying them:
+//! `cargo run --release -p fileforge-core --example measure_raster -- a.jpg b.png c.webp`
 //! Set `MEASURE_OUT=<dir>` to also write each result there for visual checks.
 
 // Core
@@ -10,10 +10,19 @@ use fileforge_core::raster::{RasterOptions, compress};
 fn main() {
     let presets = [
         ("lossless", RasterOptions::LOSSLESS),
-        ("balanced", RasterOptions { jpeg_quality: Some(85), png_level: 4, ..RasterOptions::LOSSLESS }),
+        (
+            "balanced",
+            RasterOptions { jpeg_quality: Some(85), webp_quality: Some(85), png_level: 4, ..RasterOptions::LOSSLESS },
+        ),
         (
             "maximum",
-            RasterOptions { jpeg_quality: Some(75), png_level: 6, png_zopfli: true, ..RasterOptions::LOSSLESS },
+            RasterOptions {
+                jpeg_quality: Some(75),
+                webp_quality: Some(75),
+                png_level: 6,
+                png_zopfli: true,
+                ..RasterOptions::LOSSLESS
+            },
         ),
         ("no-meta", RasterOptions { strip_metadata: true, ..RasterOptions::LOSSLESS }),
     ];

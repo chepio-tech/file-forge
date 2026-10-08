@@ -51,14 +51,21 @@ charstring scan is capped at 64 M interpreted bytes and 10 nested calls, and the
 A rewritten font is used only after parsing it again proves that every glyph executes the same bytes.
 Corrupted fonts are fuzzed in the `pdf::cff` unit tests.
 
-## Untrusted images (ADR-0019)
-JPEG and PNG files are parsed only by safe Rust: `jpeg-decoder`, the `png` crate and the engine's own JPEG marker and
-scan reader (`raster::jpeg`), all bounds-checked; scan decoding is strict and fails rather than guessing. The
-format comes from the content, never the extension. Pixel counts are checked from the header before decoding.
+## Untrusted images (ADR-0019, ADR-0020)
+JPEG, PNG and WebP files are parsed only by safe Rust: `jpeg-decoder`, the `png` crate, `image-webp`
+(`forbid(unsafe_code)`) and the engine's own JPEG marker and scan reader (`raster::jpeg`) and RIFF chunk reader
+(`raster::webp`), all bounds-checked; scan decoding is strict and fails rather than guessing. The format comes from
+the content, never the extension. Pixel counts are checked from the header before decoding.
 Two C libraries are linked, both on the encoding side only: libdeflate (through oxipng) compresses rows and an ICC
-profile the `png` crate already decoded, and, from the WebP step on, libwebp encodes decoded pixels. Neither ever
-reads the user's file. Every candidate is decoded again before use. Signed files (C2PA, PNG `dSIG`) are returned
-unchanged. Corrupted JPEGs and PNGs are fuzzed by byte flips in `tests/raster_compress.rs`.
+profile the `png` crate already decoded, and libwebp encodes pixels `image-webp` decoded. Neither ever reads the
+user's file; libwebp's decoder is linked but only tests call it. Every candidate is decoded again before use.
+Signed files (C2PA in JPEG, PNG and WebP; PNG `dSIG`) are returned unchanged. Corrupted JPEGs, PNGs and WebPs are
+fuzzed by byte flips in `tests/raster_compress.rs` and `tests/raster_webp.rs`.
+
+`unsafe` code is forbidden in every crate except `crates/fileforge-webp` (ADR-0020), which calls libwebp's encoder.
+It checks sizes and buffer lengths before any C call, frees libwebp's memory through guards on every path, never
+lets a panic unwind into C, and documents each `unsafe` block (`clippy::undocumented_unsafe_blocks` is denied).
+Its tests round-trip pixels at edge sizes and cross-check libwebp's decoder against `image-webp`.
 
 ## Temp results
 Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
