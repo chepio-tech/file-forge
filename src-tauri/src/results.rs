@@ -16,7 +16,7 @@ use crate::file_registry::FileId;
 pub struct StoredResult {
     pub temp_path: PathBuf,
     pub saved_path: Option<PathBuf>,
-    /// File extension of the result's format, without the dot: `pdf`, `jpg`, `jpeg` or `png`.
+    /// File extension of the result's format, without the dot: `pdf`, `jpg`, `jpeg`, `png` or `webp`.
     pub extension: &'static str,
 }
 

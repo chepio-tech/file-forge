@@ -23,6 +23,9 @@ enough = "0.4"
 # PNG optimizer. Its libdeflate (C) only compresses pixels png decoded; untrusted bytes are never inflated in C.
 oxipng = { version = "10.2", default-features = false, features = ["parallel", "zopfli"] }
 png = "0.17"
+# WebP: image-webp (safe Rust) decodes untrusted files; fileforge-webp (libwebp) only encodes decoded pixels.
+image-webp = "0.2.4"
+fileforge-webp.workspace = true
 rayon = "1.11"
 serde.workspace = true
 thiserror.workspace = true

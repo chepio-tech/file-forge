@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/fileforge-core", "src-tauri"]
+members = ["crates/fileforge-core", "crates/fileforge-webp", "src-tauri"]
 
 [workspace.package]
 version = "0.1.2"
@@ -10,10 +10,12 @@ authors = ["Denys Chepiha"]
 
 [workspace.dependencies]
 fileforge-core = { path = "crates/fileforge-core" }
+fileforge-webp = { path = "crates/fileforge-webp" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
+# Every crate except crates/fileforge-webp inherits these; that crate holds the only unsafe code (ADR-0020).
 [workspace.lints.rust]
 unsafe_code = "forbid"
 

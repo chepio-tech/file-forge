@@ -16,16 +16,21 @@
 
 Flate screen-content checks run before resizing, and the JPEG must beat equivalent Deflate (ADR-0016).
 
-## Critical path: compress one image (ADR-0019)
+## Critical path: compress one image (ADR-0019, ADR-0020)
 1. UI calls `compress_image(id, options)`; the shell validates options, takes the work slot and reads the file as for
    PDFs, with the image input limit.
-2. `fileforge_core::raster::compress_controlled`: detect JPEG or PNG by content → check the pixel count from the header
-   → keep files with data after the image, Content Credentials, PNG signatures or animation → decode (`jpeg-decoder`,
-   `png`) → build candidates → decode each candidate again → keep the smallest valid one if it is smaller.
+2. `fileforge_core::raster::compress_controlled`: detect JPEG, PNG or WebP by content → check the pixel count from
+   the header → keep files with data after the image, Content Credentials, PNG signatures or animation → decode
+   (`jpeg-decoder`, `png`, `image-webp`) → build candidates → decode each candidate again → keep the smallest valid
+   one if it is smaller.
    - JPEG: lossy presets re-encode with `mozjpeg-rs` first and free the pixels; then the lossless transcoder
      (sequential Huffman 8-bit) or, with metadata removal only, a segment rewrite. A lossless candidate must decode to
      the same pixel hash; a lossy one must be at least 2% smaller than the best lossless result.
    - PNG: oxipng optimizes the decoded rows (`RawImage`); the result must decode to the same 16-bit RGBA samples.
+   - WebP: lossless files are re-encoded by libwebp (`fileforge-webp`) at level 9 up to 2048×2048 pixels, level 7
+     above, with exact transparent colors, and must decode to the same RGBA samples. Lossy files keep their image
+     chunks unless a WebP quality is set; then libwebp re-encodes them (method 6, or 5 with alpha) and the result must
+     keep the size and alpha values and be at least 2% smaller. The container keeps the original chunk order.
 3. Stages reported: `loading`, `encoding`, `verifying`. The shell stores the result with the format's extension.
 
 ## Cancellation (ADR-0011)
@@ -34,7 +39,8 @@ slot; `cancel_compression` advances the counter. The shell checks the ticket aft
 the file), and the engine checks it before and after loading, after the structure pass, before each image and
 stream, after the image and stream passes, and before verification. Parsing and saving are single lopdf calls and
 cannot be interrupted, so a cancel takes effect at the next checkpoint. Images check between stages, every 4,096 MCUs
-of the JPEG transcoder and inside `mozjpeg-rs`; oxipng cannot be interrupted, but its filter trials stop after 60 s
+of the JPEG transcoder and inside `mozjpeg-rs` and libwebp (its progress callback); oxipng cannot be interrupted, but
+its filter trials stop after 60 s
 and Zopfli runs only on small images. The UI stops starting files as soon as
 Cancel is pressed, even if the IPC call fails; a file that finishes before reaching a checkpoint keeps its result.
 
@@ -63,6 +69,7 @@ clears temp results; on Windows the plugin exits from the installer hook, which 
 | Decoded PNG rows (all channels and bit depths) | 512 MiB | same |
 | PNG rows Zopfli runs on (Maximum) | 512 KiB (≈ 2.5 s for a 256×256 RGBA icon) | same |
 | oxipng filter trials per image | 60 s, then the best result so far | same |
+| Lossless WebP pixels encoded at libwebp's slowest level 9 | 2048 × 2048 (≈ 12 s measured at 3.7 MP); larger images use level 7 | same |
 | Concurrent compressions | 1 | `ResultStore::work_slot` |
 | Folder levels searched below a dropped folder | 16 | `src-tauri/src/folder_scan.rs` (`ScanLimits`) |
 | Directory entries examined per drop | 10,000 | same |
@@ -70,6 +77,7 @@ clears temp results; on Windows the plugin exits from the installer hook, which 
 
 Peak memory ≈ input + parsed document + up to 4 decoded bitmaps (JPEG 2000 decoding: up to ~8 bytes per sample).
 Images: input + decoded pixels (or JPEG coefficients) + one candidate; pixels are freed before the transcoder runs.
+WebP: input + decoded pixels + libwebp's working copy (ARGB, about the same again) + one candidate.
 
 ## Failure modes
 | Failure | Behavior |
@@ -78,10 +86,12 @@ Images: input + decoded pixels (or JPEG coefficients) + one candidate; pixels ar
 | Dropped folder cannot be read | Named in the intake notice; the rest of the drop is added |
 | Dropped folders exceed a search limit | Files found so far are added; the notice says some were not (ADR-0017) |
 | Encrypted or signed | `pdfEncrypted` / `pdfSigned`, file untouched |
-| Not a JPEG or PNG by content (e.g. WebP, HEIC renamed) | `imageUnsupported` for that file |
+| Not a JPEG, PNG or WebP by content (e.g. HEIC or GIF renamed) | `imageUnsupported` for that file |
 | Damaged image | `imageMalformed`; a JPEG the strict transcoder cannot read but `jpeg-decoder` can is kept (`unsupportedEncoding`) |
 | Image above the byte or pixel limit | `imageTooLarge` |
-| Signed (C2PA, `dSIG`), animated PNG or data after the image | Original returned byte for byte with the reason (`kept`) |
+| Signed (C2PA, `dSIG`), animated PNG or WebP, or data after the image | Original returned byte for byte with the reason (`kept`) |
+| Lossy WebP without a WebP quality | Original returned byte for byte (`lossyEncoding`) unless metadata is removed |
+| WebP whose VP8X header denies the alpha its image data has | Original returned byte for byte (`unsupportedEncoding`): re-encoding could drop the transparency |
 | An image candidate decodes differently | Candidate dropped, original kept; never surfaced as an error |
 | One image fails to decode or re-encode | Image left as is, document still compressed |
 | The JPEG 2000 decoder panics on one image | Caught for that image (ADR-0015); image left as is, document still compressed |
@@ -157,3 +167,24 @@ smaller than level 4 (a 2048×2048 icon: +0.3 KB); both stay below the input. Th
 one `.jpg` in the set was a PNG and was optimized as one.
 
 Reproduce: `cargo run --release -p fileforge-core --example measure_raster -- <files>`.
+
+## Measured: WebP (Apple M-series, release build, 2026-10-08, ADR-0020)
+Read-only `measure_raster` runs on non-private files: WebPs shipped in app bundles (mostly Android Studio device
+art), and macOS wallpapers, an iOS Simulator sample photo and system UI images converted with cwebp 1.6.0.
+| Input | Lossless | Balanced (85) | Maximum (75) |
+|---|---|---|---|
+| 95 distinct lossless app WebPs, 11.6 MB, up to 7.3 MP | −6.7% in total (per file 0…70.5%, median 5.9%; 15 kept) | same | same |
+| 59 distinct lossy app WebPs, 42 of them with alpha, 3.6 MB | kept (`lossyEncoding`) | −14.1% (21 kept: under 2%) | −30.5% (median 27%) |
+| cwebp q90 photos 3840×2160–4288×2848, 0.85–1.48 MB | kept | −23.2…53.3% (1.1–1.7 s) | −53.4…81.2% (0.9–1.2 s) |
+| cwebp q75 photos (cwebp's default), 0.33–0.55 MB | kept | kept (under 2%) | −7.7…18.4% (0.8–1.0 s) |
+| cwebp lossless UI image 2560×1440, 561 KB | −24.3% (5.9 s) | same | same |
+| cwebp lossless icons 1024×1024 with alpha, 288–324 KB | −1.8…2.6% (1.5–1.7 s) | same | same |
+| cwebp lossless photo 3840×2160, 7.2 MB (level 7) | −0.1% (5.4 s) | same | same |
+| cwebp q75 icons and UI with alpha, 12–25 KB | kept | 0…2.2% | 0…6.3% |
+
+Times are from a sequential run; the app-bundle set ran six processes in parallel, so its times are not reported.
+Encoder settings were chosen with cwebp 1.6.0 on these files: lossless level 9 took 12 s for −24% on the UI image
+(levels 6–8: at most −2.8%) and 43 s on the lossless photo for a larger file than level 7. Lossy method 6 was 2–16%
+smaller than method 4 on photos for 1.3–1.6× the time; with exact alpha it took 10–30× longer (5.2 s on a 3.5 MP
+frame) for 4–7%, so images with alpha use method 5. Maximum re-encodes files saved at cwebp's default quality 75 again
+at 75: 8–18% smaller, at the cost of a second generation of loss; Balanced leaves them.

@@ -18,6 +18,9 @@ pub(crate) struct Limits {
     pub max_zopfli_bytes: usize,
     /// oxipng stops trying further filters after this long and keeps its best result so far.
     pub png_timeout: Duration,
+    /// Lossless WebPs up to this many pixels get libwebp's slowest level (up to about 12 s measured at 3.7 MP);
+    /// larger ones a level that costs seconds, not minutes.
+    pub max_webp_effort_pixels: u64,
 }
 
 impl Limits {
@@ -27,5 +30,7 @@ impl Limits {
         max_png_bytes: 512 << 20,
         max_zopfli_bytes: 512 << 10,
         png_timeout: Duration::from_secs(60),
+        // 2048 × 2048: covers 2560 × 1600 screens.
+        max_webp_effort_pixels: 2048 * 2048,
     };
 }

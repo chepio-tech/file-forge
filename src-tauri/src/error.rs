@@ -34,7 +34,7 @@ pub enum AppError {
     /// The image file or its pixel count exceeds the engine's limits; `detail` names which.
     #[error("the image is too large: {0}")]
     ImageTooLarge(String),
-    /// Not a JPEG or PNG by content; `detail` names the format when known (e.g. "WebP").
+    /// Not a JPEG, PNG or WebP by content; `detail` names the format when known (e.g. "GIF").
     #[error("unsupported image format: {0}")]
     ImageUnsupported(String),
     #[error("not a readable image: {0}")]
@@ -138,7 +138,7 @@ mod tests {
             matches!(AppError::from(RasterError::TooManyPixels { limit: 9 }), AppError::ImageTooLarge(d) if d == "9 pixels")
         );
         assert!(
-            matches!(AppError::from(RasterError::Unsupported("WebP".into())), AppError::ImageUnsupported(d) if d == "WebP")
+            matches!(AppError::from(RasterError::Unsupported("GIF".into())), AppError::ImageUnsupported(d) if d == "GIF")
         );
         assert!(matches!(AppError::from(RasterError::Cancelled), AppError::Cancelled));
         let json = serde_json::to_value(AppError::ImageMalformed("x".into())).ok();

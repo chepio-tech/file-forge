@@ -7,7 +7,7 @@ import type { RasterOptions } from "@/services/fileforgeApi";
 import type { PresetId } from "./imagePresets";
 // Consts
 import messages from "@/messages/messages";
-import { JPEG_QUALITY, PNG_LEVEL } from "./imagePresets";
+import { JPEG_QUALITY, PNG_LEVEL, WEBP_QUALITY } from "./imagePresets";
 
 interface ImageSettingsProps {
   preset: PresetId;
@@ -45,6 +45,15 @@ function ImageSettings({ preset, options, disabled, onPreset, onCustom, onOption
             onCommit={(jpegQuality) => onCustom({ ...options, jpegQuality })}
           />
           <NumberField
+            label={text.webpQuality}
+            value={options.webpQuality}
+            min={WEBP_QUALITY.min}
+            max={WEBP_QUALITY.max}
+            placeholder={text.keepPixels}
+            disabled={disabled}
+            onCommit={(webpQuality) => onCustom({ ...options, webpQuality })}
+          />
+          <NumberField
             label={text.pngLevel}
             value={options.pngLevel}
             min={PNG_LEVEL.min}
@@ -55,7 +64,7 @@ function ImageSettings({ preset, options, disabled, onPreset, onCustom, onOption
         </div>
       </div>
       <p className="compression-settings__hint">
-        {text.hint(options.jpegQuality, options.pngLevel, options.pngZopfli === true)}
+        {text.hint(options.jpegQuality, options.webpQuality, options.pngLevel, options.pngZopfli === true)}
       </p>
       <div className="compression-settings__options">
         <Checkbox

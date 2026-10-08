@@ -46,10 +46,11 @@ Format conversion, video and audio tools are planned; they are shown as **Soon**
   single glyph.
 - Optionally remove metadata, page thumbnails and Illustrator/Photoshop editing data; PDF/A, PDF/UA and PDF/X
   files keep the metadata they require.
-- Compress JPEG and PNG images. Lossless keeps every pixel: JPEGs get optimal Huffman tables, PNGs better filters
-  and compression. Balanced (JPEG quality 85) and Maximum (75) re-encode JPEGs only when that saves at least 2%;
-  PNGs always stay lossless. Metadata stays unless you remove it; color profiles and photo orientation always stay.
-  Signed (Content Credentials), animated and HDR gain-map files are returned unchanged.
+- Compress JPEG, PNG and WebP images. Lossless keeps every pixel: JPEGs get optimal Huffman tables, PNGs better
+  filters and compression, lossless WebPs a stronger libwebp encoding. Balanced (quality 85) and Maximum (75)
+  re-encode JPEGs and lossy WebPs only when that saves at least 2%; PNGs and lossless WebPs always stay lossless.
+  Metadata stays unless you remove it; color profiles and photo orientation always stay. Signed (Content
+  Credentials), animated and HDR gain-map files are returned unchanged.
 - Follow each file's progress, cancel a running batch, and compare original/result sizes per file and for the
   batch, then save one result or all results to a folder.
 - Keep originals untouched. Results are never larger; encrypted and digitally signed PDFs are refused.
@@ -90,8 +91,8 @@ see [deployment](docs/architecture/deployment.md).
 ## Current limits
 
 - PDF inputs are limited to 1 GiB, images to 256 MiB and 120 megapixels; compression runs one file at a time.
-- Lossless leaves progressive JPEGs as they are unless metadata is removed. WebP, HEIC, GIF and other image formats
-  are not compressed yet.
+- Lossless leaves progressive JPEGs and lossy WebPs as they are unless metadata is removed. HEIC, AVIF, GIF and
+  other image formats are not compressed yet.
 - Cancel stops a running document at its next checkpoint; parsing and saving a document are not interrupted.
 - One drop adds up to 1,000 files from folders, searched up to 16 levels deep.
 - Unsupported image encodings are preserved; lossy presets do not guarantee additional savings on every PDF.

@@ -7,6 +7,8 @@ use super::error::RasterError;
 
 /// JPEG quality the UI offers for re-encoding, the same range as for PDF images.
 pub const JPEG_QUALITY_RANGE: RangeInclusive<u8> = 30..=95;
+/// WebP quality for re-encoding lossy WebPs, the same range as for JPEG.
+pub const WEBP_QUALITY_RANGE: RangeInclusive<u8> = 30..=95;
 /// oxipng optimization levels: more filter and compression trials at higher levels, never a lossy step.
 pub const PNG_LEVEL_RANGE: RangeInclusive<u8> = 0..=6;
 
@@ -18,6 +20,10 @@ pub struct RasterOptions {
     pub jpeg_quality: Option<u8>,
     /// oxipng level for PNGs, see [`PNG_LEVEL_RANGE`].
     pub png_level: u8,
+    /// Re-encode lossy WebPs at this quality when that is at least 2% smaller; `None` keeps their pixels exactly.
+    /// Lossless WebPs always stay lossless.
+    #[serde(default)]
+    pub webp_quality: Option<u8>,
     /// Finish small PNGs with Zopfli: a few percent smaller, many times slower.
     #[serde(default)]
     pub png_zopfli: bool,
@@ -28,7 +34,8 @@ pub struct RasterOptions {
 }
 
 impl RasterOptions {
-    pub const LOSSLESS: Self = Self { jpeg_quality: None, png_level: 2, png_zopfli: false, strip_metadata: false };
+    pub const LOSSLESS: Self =
+        Self { jpeg_quality: None, png_level: 2, webp_quality: None, png_zopfli: false, strip_metadata: false };
 
     pub fn validate(&self) -> Result<(), RasterError> {
         if let Some(quality) = self.jpeg_quality
@@ -36,6 +43,13 @@ impl RasterOptions {
         {
             return Err(RasterError::InvalidOptions(format!(
                 "JPEG quality {quality} is outside {JPEG_QUALITY_RANGE:?}"
+            )));
+        }
+        if let Some(quality) = self.webp_quality
+            && !WEBP_QUALITY_RANGE.contains(&quality)
+        {
+            return Err(RasterError::InvalidOptions(format!(
+                "WebP quality {quality} is outside {WEBP_QUALITY_RANGE:?}"
             )));
         }
         if !PNG_LEVEL_RANGE.contains(&self.png_level) {
@@ -59,6 +73,10 @@ mod tests {
         assert!(matches!(quality.validate(), Err(RasterError::InvalidOptions(_))));
         let level = RasterOptions { png_level: 7, ..RasterOptions::LOSSLESS };
         assert!(matches!(level.validate(), Err(RasterError::InvalidOptions(_))));
+        for webp_quality in [29, 96] {
+            let webp = RasterOptions { webp_quality: Some(webp_quality), ..RasterOptions::LOSSLESS };
+            assert!(matches!(webp.validate(), Err(RasterError::InvalidOptions(_))));
+        }
     }
 
     #[test]
