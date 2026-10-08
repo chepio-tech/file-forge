@@ -1,7 +1,7 @@
 # ADR-0015: JPEG 2000 images become JPEG, a Screen preset, and reference-accurate image decoders
 
 ## Status
-Accepted
+Accepted; decoder moved from the git pin to crates.io 0.4.1 on 2026-10-08 (see Follow-up)
 
 ## Date
 2026-10-03
@@ -87,6 +87,11 @@ repeated compression safe.
 - zune-jpeg reads jpeg-encoder output correctly: compare speed against jpeg-decoder.
 - Readers support JPEG XL in PDF, or a Rust JPEG 2000 encoder matures.
 - Users rarely pick Screen, or ask for a print-oriented middle ground.
+
+## Follow-up (2026-10-08)
+hayro-jpeg2000 0.4.1 (crates.io, 2026-10-04) contains #1340: its tag is `ced00dd` plus a version bump, and the
+published `src/` is byte-identical to the pinned commit. The dependency now requires `0.4.1` from crates.io, so
+Dependabot proposes its updates; `decodes_irreversible_images_like_openjpeg` guards against a regression.
 
 ## References
 - ISO 32000-2, 7.4.9 JPXDecode filter, 8.9.5 Image dictionaries (`SMaskInData`, `Decode`)

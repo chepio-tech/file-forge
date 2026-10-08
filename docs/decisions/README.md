@@ -16,7 +16,7 @@
 | [ADR-0012](ADR-0012-metadata-removal.md) | Optional removal of metadata, thumbnails and editing data | Accepted |
 | [ADR-0013](ADR-0013-in-app-updates.md) | In-app updates from signed GitHub release artifacts | Accepted |
 | [ADR-0014](ADR-0014-product-name.md) | The product name is "File Forge" and stays fixed once updates ship | Accepted |
-| [ADR-0015](ADR-0015-jpeg2000-and-screen-preset.md) | JPEG 2000 images become JPEG, a Screen preset, and reference-accurate image decoders | Accepted |
+| [ADR-0015](ADR-0015-jpeg2000-and-screen-preset.md) | JPEG 2000 images become JPEG, a Screen preset, and reference-accurate image decoders | Accepted; decoder from crates.io since 2026-10-08 |
 | [ADR-0016](ADR-0016-flate-photographs.md) | Convert suitable Flate photographs to JPEG in Maximum | Accepted |
 | [ADR-0017](ADR-0017-folder-drops.md) | Dropped folders are searched in Rust for the active tool's file types | Accepted |
 | [ADR-0018](ADR-0018-cff-subroutine-pruning.md) | Unreachable CFF subroutines are removed in every preset | Accepted |
