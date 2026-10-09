@@ -5,6 +5,9 @@ image transform, rewritten where tract (the app's inference engine) cannot run S
 - Hiera's bicubic positional-embedding interpolation is stored as a constant (the input size is fixed).
 - The mask decoder runs for one image and one prompt set, without SAM 2's batch-size `expand`s.
 - Point positional encoding avoids in-place slice writes (they export as ScatterND).
+- Hiera's three global-attention blocks attend in 8 query chunks: tract materializes attention matrices, and one
+  4,096 × 4,096 × 4-head matrix (256 MiB, packed twice) would dominate the encoder's peak memory. Each query row's
+  attention is independent, so the result is the same.
 Large weights are stored as float16 followed by a Cast to float32, which halves the download; computation stays f32.
 
 After exporting, the script checks the ONNX files with ONNX Runtime against SAM 2 in PyTorch on the given images and
@@ -20,6 +23,7 @@ import hashlib
 import json
 import os
 import sys
+import types
 
 import numpy as np
 import onnx
@@ -37,6 +41,27 @@ MEAN = (0.485, 0.456, 0.406)
 STD = (0.229, 0.224, 0.225)
 # Tensors with at least this many elements are stored as float16.
 F16_MIN_ELEMENTS = 1024
+# Global attention over this many query × key tokens or more is split into query chunks.
+ATTENTION_CHUNK_MIN = 4096 * 4096
+ATTENTION_CHUNKS = 8
+
+
+def chunked_attention(self, x):
+    """`MultiScaleAttention.forward` with large attentions computed in query chunks (same math, less memory)."""
+    from sam2.modeling.backbones.hieradet import do_pool
+
+    B, H, W, _ = x.shape
+    qkv = self.qkv(x).reshape(B, H * W, 3, self.num_heads, -1)
+    q, k, v = torch.unbind(qkv, 2)
+    if self.q_pool:
+        q = do_pool(q.reshape(B, H, W, -1), self.q_pool)
+        H, W = q.shape[1:3]
+        q = q.reshape(B, H * W, self.num_heads, -1)
+    q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+    chunks = ATTENTION_CHUNKS if q.shape[2] * k.shape[2] >= ATTENTION_CHUNK_MIN else 1
+    x = torch.cat([F.scaled_dot_product_attention(part, k, v) for part in q.chunk(chunks, dim=2)], dim=2)
+    x = x.transpose(1, 2).reshape(B, H, W, -1)
+    return self.proj(x)
 
 
 def load_model(sam2_dir: str, checkpoint: str) -> nn.Module:
@@ -70,6 +95,8 @@ class Encoder(nn.Module):
             # Hiera's patch embedding has stride 4: 1024 → 256 tokens per side.
             pos_embed = trunk._get_pos_embed((IMAGE_SIZE // 4, IMAGE_SIZE // 4)).clone()
         trunk._get_pos_embed = lambda hw: pos_embed
+        for block in trunk.blocks:
+            block.attn.forward = types.MethodType(chunked_attention, block.attn)
 
     def forward(self, image):
         backbone_out = self.model.forward_image(image)
@@ -133,6 +160,16 @@ class Decoder(nn.Module):
         no_mask = self.prompt.no_mask_embed.weight.reshape(1, -1, 1, 1)
         dense = has_mask_input * self.prompt.mask_downscaling(mask_input) + (1 - has_mask_input) * no_mask
         return self.predict_masks(image_embed, sparse, dense, high_res_0, high_res_1)
+
+
+def reference_features(model, image):
+    """What SAM2ImagePredictor.set_image computes after the transform, on an unmodified model."""
+    backbone_out = model.forward_image(image)
+    _, vision_feats, _, _ = model._prepare_backbone_features(backbone_out)
+    vision_feats[-1] = vision_feats[-1] + model.no_mem_embed
+    sizes = [(IMAGE_SIZE // 4, IMAGE_SIZE // 4), (IMAGE_SIZE // 8, IMAGE_SIZE // 8), (IMAGE_SIZE // 16, IMAGE_SIZE // 16)]
+    feats = [f.permute(1, 2, 0).reshape(1, -1, h, w) for f, (h, w) in zip(vision_feats, sizes)]
+    return feats[2], feats[0], feats[1]
 
 
 def reference_decoder(model, feats, coords, labels):
@@ -213,19 +250,19 @@ def write_f32(path, array):
 
 
 def check(model, out_dir, images):
-    """ONNX Runtime vs PyTorch on each image (center click and a three-point prompt); writes tract reference data."""
+    """ONNX Runtime vs unmodified SAM 2 in PyTorch on each image (center click and a three-point prompt); writes the
+    ONNX Runtime outputs as reference data for the app's engine."""
     options = onnxruntime.SessionOptions()
     options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
     encoder = onnxruntime.InferenceSession(os.path.join(out_dir, "encoder.onnx"), options)
     decoder = onnxruntime.InferenceSession(os.path.join(out_dir, "decoder.onnx"), options)
-    torch_encoder = Encoder(model).eval()
     report = []
     for image_path in images:
         name = os.path.splitext(os.path.basename(image_path))[0]
         image, x = preprocess(image_path)
         h, w = image.shape[:2]
         with torch.no_grad():
-            feats = torch_encoder(x)
+            feats = reference_features(model, x)
         onnx_feats = encoder.run(None, {"image": x.numpy()})
         reference_dir = os.path.join(out_dir, "reference", name)
         os.makedirs(reference_dir, exist_ok=True)
@@ -337,7 +374,8 @@ def main():
     for path in (encoder_path, decoder_path):
         print(f"{os.path.basename(path)}: {store_weights_as_f16(path)} tensors stored as float16")
 
-    report = check(model, args.out, args.image)
+    # The export patched `model` (positional embedding, attention); check against a fresh, unmodified copy.
+    report = check(load_model(args.sam2, args.checkpoint), args.out, args.image)
     manifest = {
         "contract": CONTRACT,
         "checkpoint_sha256": sha256(args.checkpoint),

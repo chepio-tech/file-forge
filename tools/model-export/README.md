@@ -15,7 +15,7 @@ in `crates/fileforge-core/tests/fixtures/` are CC0 and public domain.
 | `decoder.onnx` | the three features; `point_coords` [1,N,2] (x, y in the 1024 frame, ending with the padding point (0,0)); `point_labels` [1,N] (−1 padding, 0 background, 1 foreground, 2/3 box corners); `mask_input` [1,1,256,256]; `has_mask_input` [1] | `masks` [1,4,256,256] logits (0: single-mask output, 1–3: multimask), `iou_predictions` [1,4], `object_score_logits` [1,1] |
 
 Both graphs equal `SAM2ImagePredictor` (`set_image`, then `_predict` with all four mask tokens); the script's
-docstring lists the rewrites tract needs. Large weights are stored as float16 and cast to float32 at load, which
+docstring lists the rewrites tract needs and the chunked global attention that halves the encoder's peak memory. Large weights are stored as float16 and cast to float32 at load, which
 halves the download (about 82 MB instead of 150 MB); masks agree with full-precision PyTorch at IoU ≥ 0.999.
 
 ## Run it locally

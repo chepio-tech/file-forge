@@ -27,11 +27,14 @@ A spike on 2026-10-09 (cloud container, 4 vCPU Xeon) established:
   prompt. Desktop CPUs are expected to be faster; no Apple Silicon measurement exists yet.
 - Storing the weights as float16 (computing in float32) makes the download 82 MB instead of about 150 MB; masks
   stay within IoU 0.999 of full precision.
+- tract materializes attention matrices: Hiera's three global-attention blocks (4,096 tokens, 4 heads) need 256 MiB
+  each, packed twice, and set the encoder's peak at about 0.8 GB. Computing them in 8 query chunks gives identical
+  outputs with about 0.45 GB less peak memory (measured on one block; the full encoder is an estimate).
 
 ## Decision
 - **Model files (step A).** `tools/model-export/export_sam2.py` exports the image encoder and mask decoder of
-  `SAM2ImagePredictor` from Meta's checkpoint (sam2 commit `2b90b9f`) to ONNX opset 17 with the three tract rewrites
-  and float16-stored weights (contract `sam2.1-hiera-tiny/1`, see the tool's README). It checks ONNX Runtime against
+  `SAM2ImagePredictor` from Meta's checkpoint (sam2 commit `2b90b9f`) to ONNX opset 17 with the three tract rewrites,
+  chunked global attention and float16-stored weights (contract `sam2.1-hiera-tiny/1`, see the tool's README). It checks ONNX Runtime against
   PyTorch and writes reference tensors. The manual `model-release` workflow downloads the checkpoint from Meta and from
   Hugging Face, requires identical bytes, exports, checks ONNX Runtime and the app's own engine
   (`tests/background_model.rs`), and creates a **draft prerelease** `models/sam2.1-hiera-tiny-v1` with the two files,
