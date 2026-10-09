@@ -11,6 +11,10 @@ dist-ssr
 coverage
 *.local
 
+# Python (tools/model-export)
+__pycache__/
+.venv/
+
 # Rust / Tauri
 /target/
 /src-tauri/gen/schemas

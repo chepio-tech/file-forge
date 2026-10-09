@@ -79,6 +79,16 @@ Release checklist:
    fix a published release with a new patch version (ADR-0010).
 5. If publication was interrupted and a draft remains, review it before an approved cleanup or retry.
 
+## Model releases (ADR-0022)
+"Remove background" downloads its model (SAM 2.1 hiera-tiny as two ONNX files) on first use instead of bundling it.
+The manual `.github/workflows/model-release.yml` builds the files from Meta's checkpoint with
+`tools/model-export/export_sam2.py`, requires identical checkpoint bytes from Meta and Hugging Face, checks the
+export against PyTorch, and creates a draft prerelease `models/<model>-v<N>` with the files, `manifest.json`,
+`SHA256SUMS` and SAM 2's license. The owner reviews the draft and publishes it as a **prerelease**, never as the latest
+release, so `releases/latest` (README buttons, updater) keeps pointing at the app. The app pins each file's size and
+SHA-256; a new export is a new tag. Model tags never start with `v`, so they cannot trigger the app release workflow.
+See `tools/model-export/README.md`.
+
 ## Repository settings
 - The repository is public on GitHub Free, so release downloads and the updater endpoint need no GitHub sign-in
   (ADR-0013). The active `Protect main` ruleset blocks deletion and force pushes, with no bypass actors, and
@@ -89,8 +99,9 @@ Release checklist:
 - Organization members need explicit repository access. Only organization owners may create repositories.
 - Dependabot vulnerability alerts and automated security fixes are enabled. `.github/dependabot.yml` configures
   weekly grouped version updates for GitHub Actions, Cargo and npm/pnpm with the `[fileforge]` commit prefix.
-- The default Actions token has read-only access and cannot approve PR reviews. Both workflows explicitly request
-  `contents: read`; only the release publication job requests `contents: write`.
+- The default Actions token has read-only access and cannot approve PR reviews. Every workflow explicitly requests
+  `contents: read`; only the release publication job and the model-release job (draft prerelease) request
+  `contents: write`.
 - Allowed actions: GitHub-owned actions plus `pnpm/action-setup@*`, `dtolnay/rust-toolchain@*` and
   `swatinem/rust-cache@*`. Update this policy when adding an action from another owner.
 - Every workflow action is pinned to a full commit SHA with a version comment; the Rust toolchain remains `stable`
