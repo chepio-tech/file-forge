@@ -23,3 +23,4 @@
 | [ADR-0019](ADR-0019-image-compression.md) | Image compression with an own lossless JPEG transcoder, mozjpeg-rs and oxipng | Accepted |
 | [ADR-0020](ADR-0020-webp-compression.md) | WebP compression with image-webp decoding and an isolated libwebp encoder crate | Accepted |
 | [ADR-0021](ADR-0021-commercial-use-licenses.md) | Third-party components must allow commercial use | Accepted |
+| [ADR-0022](ADR-0022-background-removal.md) | Background removal with SAM 2.1 hiera-tiny in tract, downloaded on first use | Proposed |
