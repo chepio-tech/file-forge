@@ -184,7 +184,7 @@ fn decode_rows(input: &[u8], limits: &Limits) -> Result<DecodedRows, RasterError
     let mut decoder = Decoder::new_with_limits(Cursor::new(input), png::Limits { bytes: limits.max_png_bytes });
     decoder.set_transformations(Transformations::IDENTITY);
     let mut reader = decoder.read_info().map_err(|error| decoding_error(error, limits))?;
-    let length = reader.output_buffer_size();
+    let length = reader.output_buffer_size().ok_or(RasterError::TooManyPixels { limit: limits.max_pixels })?;
     if length > limits.max_png_bytes {
         return Err(RasterError::TooManyPixels { limit: limits.max_pixels });
     }
@@ -248,7 +248,7 @@ fn pixel_hash(input: &[u8], limits: &Limits) -> Result<u64, RasterError> {
     let mut decoder = Decoder::new_with_limits(Cursor::new(input), png::Limits { bytes: limits.max_png_bytes });
     decoder.set_transformations(Transformations::EXPAND);
     let mut reader = decoder.read_info().map_err(|error| decoding_error(error, limits))?;
-    let length = reader.output_buffer_size();
+    let length = reader.output_buffer_size().ok_or(RasterError::TooManyPixels { limit: limits.max_pixels })?;
     if length > limits.max_png_bytes {
         return Err(RasterError::TooManyPixels { limit: limits.max_pixels });
     }
