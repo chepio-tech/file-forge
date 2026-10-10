@@ -332,7 +332,7 @@ fn png_bytes(spec: &PngSpec, data: &[u8]) -> Vec<u8> {
         encoder.set_color(spec.color);
         encoder.set_depth(spec.depth);
         encoder.set_compression(png::Compression::Fast);
-        encoder.set_filter(png::FilterType::NoFilter);
+        encoder.set_filter(png::Filter::NoFilter);
         if let Some(palette) = &spec.palette {
             encoder.set_palette(palette.clone());
         }
@@ -366,10 +366,10 @@ fn rgba_png(chunks: &[([u8; 4], &[u8])]) -> Vec<u8> {
 
 /// Every pixel as 16-bit RGBA, decoded independently of the engine.
 fn png_pixels(bytes: &[u8]) -> (u32, u32, Vec<u16>) {
-    let mut decoder = png::Decoder::new(bytes);
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::EXPAND);
     let mut reader = decoder.read_info().expect("valid PNG");
-    let mut buffer = vec![0; reader.output_buffer_size()];
+    let mut buffer = vec![0; reader.output_buffer_size().expect("bounded fixture")];
     let frame = reader.next_frame(&mut buffer).expect("decodes");
     let (color, depth) = reader.output_color_type();
     let channels = color.samples();
@@ -567,7 +567,7 @@ fn png_color_profiles_survive() {
     let input = rgba_png(&[(*b"iCCP", &iccp)]);
     for options in [LOSSLESS, STRIP] {
         let output = compress(&input, &options).expect("compresses");
-        let mut decoder = png::Decoder::new(&output.bytes[..]);
+        let mut decoder = png::Decoder::new(std::io::Cursor::new(&output.bytes[..]));
         decoder.set_transformations(png::Transformations::IDENTITY);
         let reader = decoder.read_info().expect("valid PNG");
         assert_eq!(reader.info().icc_profile.as_deref(), Some(&profile[..]));
