@@ -18,6 +18,7 @@ pub struct StoredResult {
     pub saved_path: Option<PathBuf>,
     /// File extension of the result's format, without the dot: `pdf`, `jpg`, `jpeg`, `png` or `webp`.
     pub extension: &'static str,
+    pub suffix: &'static str,
 }
 
 pub struct ResultStore {
@@ -39,11 +40,15 @@ impl ResultStore {
     }
 
     pub fn put(&self, id: FileId, bytes: &[u8], extension: &'static str) -> io::Result<()> {
+        self.put_named(id, bytes, extension, "compressed")
+    }
+
+    pub fn put_named(&self, id: FileId, bytes: &[u8], extension: &'static str, suffix: &'static str) -> io::Result<()> {
         let temp_path = self.dir.join(format!("{id}.{extension}"));
         write_atomically(&temp_path, |file| file.write_all(bytes), |tmp| fs::rename(tmp, &temp_path))?;
         // A new result of another format replaces the old one under a different temp name.
         if let Some(previous) =
-            self.lock().insert(id, StoredResult { temp_path: temp_path.clone(), saved_path: None, extension })
+            self.lock().insert(id, StoredResult { temp_path: temp_path.clone(), saved_path: None, extension, suffix })
             && previous.temp_path != temp_path
         {
             let _ = fs::remove_file(previous.temp_path);
@@ -99,9 +104,14 @@ impl ResultStore {
 }
 
 /// `report.pdf` → `report-compressed.pdf`, with the result's extension.
+#[cfg(test)]
 pub fn output_name(input_name: &str, extension: &str) -> String {
+    output_name_with_suffix(input_name, extension, "compressed")
+}
+
+pub fn output_name_with_suffix(input_name: &str, extension: &str, suffix: &str) -> String {
     let stem = Path::new(input_name).file_stem().map_or_else(|| "document".into(), |s| s.to_string_lossy());
-    format!("{stem}-compressed.{extension}")
+    format!("{stem}-{suffix}.{extension}")
 }
 
 /// `dir/name`, or `dir/name (2)`, `(3)`… when taken, so saving a batch never overwrites existing files.
@@ -187,6 +197,19 @@ fn remaining_partials(dir: &Path) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cutouts_have_their_own_suffix_and_formats() {
+        let dir = tempfile::tempdir().expect("dir");
+        let store = ResultStore::open(dir.path().join("results")).expect("store");
+        store.put_named(1, b"cutout", "png", "cutout").expect("result");
+        let result = store.get(1).expect("stored");
+        assert_eq!(result.suffix, "cutout");
+        assert_eq!(output_name_with_suffix("photo.jpg", result.extension, result.suffix), "photo-cutout.png");
+        store.put_named(1, b"webp", "webp", "cutout").expect("new format");
+        assert!(!result.temp_path.exists());
+        assert_eq!(store.get(1).expect("new").extension, "webp");
+    }
 
     #[test]
     fn concurrent_batch_saves_never_overwrite_each_other() {
@@ -334,7 +357,12 @@ mod tests {
     #[test]
     fn a_failed_copy_leaves_nothing_behind() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let missing = StoredResult { temp_path: dir.path().join("gone.pdf"), saved_path: None, extension: "pdf" };
+        let missing = StoredResult {
+            temp_path: dir.path().join("gone.pdf"),
+            saved_path: None,
+            extension: "pdf",
+            suffix: "compressed",
+        };
         let target = dir.path().join("out.pdf");
 
         assert!(copy_result(&missing, &target).is_err());

@@ -41,7 +41,8 @@ export interface CompressionJobs<Options, Report> {
   /** Why the last save failed; results stay intact and can be saved again. */
   notice: string | null;
   dismissNotice: () => void;
-  compressAll: (options: Options) => Promise<void>;
+  compressAll: (options: Options, optionsForFile?: (id: FileId) => Options) => Promise<void>;
+  compressOne: (id: FileId, options: Options) => Promise<void>;
   /** Stops the run: the current file is cancelled, files not started yet are left untouched. */
   cancel: () => void;
   save: (id: FileId) => Promise<void>;
@@ -90,15 +91,13 @@ export function useCompressionJobs<Options, Report>(
   }, []);
 
   const compressAll = useCallback(
-    async (options: Options) => {
+    async (options: Options, optionsForFile?: (id: FileId) => Options) => {
       if (operating.current || files.length === 0) return;
       operating.current = true;
       cancelRequested.current = false;
       const ids = files.map((file) => file.id);
       setNotice(null);
       setJobs(new Map(ids.map((id) => [id, { status: "waiting" } as Job])));
-      const key = engine.optionsKey(options);
-      const removalRequested = engine.removalRequested(options);
       try {
         for (const [index, id] of ids.entries()) {
           if (cancelRequested.current) break;
@@ -106,8 +105,9 @@ export function useCompressionJobs<Options, Report>(
           setProgress({ current: index + 1, total: ids.length });
           update(id, { status: "working" });
           try {
-            const report = await engine.compress(id, options, (progress) => showProgress(id, progress));
-            update(id, { status: "done", report, optionsKey: key, removalRequested });
+            const fileOptions = optionsForFile?.(id) ?? options;
+            const report = await engine.compress(id, fileOptions, (progress) => showProgress(id, progress));
+            update(id, { status: "done", report, optionsKey: engine.optionsKey(fileOptions), removalRequested: engine.removalRequested(fileOptions) });
           } catch (error) {
             const cancelled = isAppError(error) && error.code === "cancelled";
             update(id, cancelled ? { status: "cancelled" } : { status: "error", message: errorMessage(error) });
@@ -125,6 +125,26 @@ export function useCompressionJobs<Options, Report>(
     },
     [files, engine, update, showProgress],
   );
+
+  const compressOne = useCallback(async (id: FileId, options: Options) => {
+    if (operating.current || !present.current.has(id)) return;
+    operating.current = true;
+    cancelRequested.current = false;
+    setProgress({ current: 1, total: 1 });
+    setNotice(null);
+    update(id, { status: "working" });
+    try {
+      const report = await engine.compress(id, options, (progress) => showProgress(id, progress));
+      update(id, { status: "done", report, optionsKey: engine.optionsKey(options), removalRequested: engine.removalRequested(options) });
+    } catch (error) {
+      update(id, isAppError(error) && error.code === "cancelled" ? { status: "cancelled" } : { status: "error", message: errorMessage(error) });
+    } finally {
+      setProgress(null);
+      setCancelling(false);
+      cancelRequested.current = null;
+      operating.current = false;
+    }
+  }, [engine, update, showProgress]);
 
   const cancel = useCallback(() => {
     if (cancelRequested.current !== false) return;
@@ -198,6 +218,7 @@ export function useCompressionJobs<Options, Report>(
     notice,
     dismissNotice: () => setNotice(null),
     compressAll,
+    compressOne,
     cancel,
     save,
     saveAll,

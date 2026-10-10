@@ -49,6 +49,7 @@ export const featureCatalog: GroupDefinition[] = [
         extensions: ["jpg", "jpeg", "png", "webp"],
         status: "ready",
       },
+      { id: "imageBackground", icon: "document", accepts: ["image"], formats: "JPEG, PNG, WebP", extensions: ["jpg", "jpeg", "png", "webp"], status: "ready" },
       { id: "imageConvert", icon: "convert", accepts: ["image"], formats: "JPEG, PNG, WebP, HEIC", status: "soon" },
     ],
   },

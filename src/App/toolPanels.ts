@@ -1,4 +1,5 @@
 // Components
+import ImageBackground from "@/features/ImageBackground/ImageBackground";
 import ImageCompress from "@/features/ImageCompress/ImageCompress";
 import PdfCompress from "@/features/PdfCompress/PdfCompress";
 // Types
@@ -9,6 +10,7 @@ import type { ToolPanel } from "@/features/toolPanel";
 export const toolPanels: Partial<Record<ToolId, ToolPanel>> = {
   pdfCompress: PdfCompress,
   imageCompress: ImageCompress,
+  imageBackground: ImageBackground,
 };
 
 export default toolPanels;

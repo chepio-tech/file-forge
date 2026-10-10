@@ -6,7 +6,7 @@
    crash the app (ADR-0004).
 2. **Webview → shell.** The webview is treated as less trusted than Rust. It holds no filesystem or dialog
    permissions and passes only ids (ADR-0004).
-3. **App → network.** Only the update check and download (ADR-0013): HTTPS GETs from Rust to the
+3. **App → network.** The update check/download (ADR-0013) and the explicit model download (ADR-0022): HTTPS GETs from Rust to the
    `chepio-tech/file-forge` GitHub releases, sending no files, names or identifiers. Opening `https://chepio.tech`
    in the system browser is allow-listed in `src-tauri/capabilities/default.json`. Files are never uploaded.
 4. **Release → installed app.** An update is installed only if its minisign signature verifies with
@@ -72,3 +72,17 @@ Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted
 the next start. Staging files are created exclusively, flushed and closed before publication, and removed on failure.
 Individual saves use an atomic rename after checking the destination. Batch saves publish with a hard link to
 the complete staging file, retrying numbered names on collisions; this never overwrites a concurrent output.
+
+## Background removal (ADR-0022)
+The webview only passes registry ids, output options and normalized click coordinates. Original/result previews
+are at most 512 pixels on their longest side. No image, filename, path or identifier enters a network request.
+Model downloads are HTTPS GETs to the fixed dedicated GitHub model release. Redirects accept only github.com,
+objects.githubusercontent.com and release-assets.githubusercontent.com, with at most four hops. A 15-second
+connection/read timeout and a ten-minute overall request timeout bound stalled downloads. Every file has a
+compiled-in size and SHA-256; partial, oversized or incorrect files never become loadable. The same hashes are
+verified again before each graph load. reqwest uses the same ring TLS provider as the updater; model downloads
+initialize it independently and idempotently before building their client.
+Untrusted images use only safe Rust decoders. Background removal refuses animation, CMYK/16-bit JPEG and images
+above 32 MP/256 MB. PNG decoding has a 256 MB allocation budget; 16-bit PNG samples are reduced to 8 bits. The
+inference adapter only sees decoded pixels and verified graph files. One work slot serializes inference, model
+management and result saving. Embeddings are keyed by input content, capped at one, and cleared with the model.

@@ -7,6 +7,7 @@
 //! use the smallest valid candidate only if it is smaller than the file, otherwise return the original bytes.
 //! Every stage reports progress and checks for cancellation through a [`Control`].
 
+pub mod background;
 mod error;
 mod exif;
 mod jpeg;

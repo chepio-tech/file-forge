@@ -18,6 +18,27 @@ use crate::control::{Control, Progress, Stage};
 
 const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
+/// Read bounded borrowed eXIf metadata, including chunks after pixel data, without allocating a chunk list.
+pub(super) fn background_orientation(input: &[u8]) -> Result<u16, RasterError> {
+    let mut pos = SIGNATURE.len();
+    let mut orientation = 1;
+    loop {
+        let header = input.get(pos..pos + 8).ok_or_else(|| malformed("truncated PNG chunk"))?;
+        let length = u32::from_be_bytes([header[0], header[1], header[2], header[3]]) as usize;
+        let end = pos
+            .checked_add(12 + length)
+            .filter(|end| *end <= input.len())
+            .ok_or_else(|| malformed("truncated PNG chunk"))?;
+        if &header[4..8] == b"eXIf" {
+            orientation = exif::rotation(&input[pos + 8..end - 4]).map(|o| o.value).unwrap_or(1);
+        }
+        if &header[4..8] == b"IEND" {
+            return Ok(orientation);
+        }
+        pos = end;
+    }
+}
+
 pub(super) fn compress(
     input: &[u8],
     options: &RasterOptions,
