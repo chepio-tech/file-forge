@@ -2,6 +2,10 @@
 import { vi } from "vitest";
 // Types
 import type {
+  BackgroundOptions,
+  BackgroundReport,
+  ModelStatus,
+  DownloadProgress,
   FileInfo,
   PdfOptions,
   PdfReport,
@@ -22,11 +26,11 @@ export function createApiMock() {
   let hover: ((hovering: boolean) => void) | null = null;
 
   const api = {
-    pickFiles: vi.fn<(kinds: string[], filterName: string) => Promise<RegisterOutcome>>(async () => ({
+    pickFiles: vi.fn<(kinds: string[], filterName: string, scope?: "background") => Promise<RegisterOutcome>>(async () => ({
       files: [],
       skipped: [],
     })),
-    setDropKinds: vi.fn(async (_kinds: string[]) => {}),
+    setDropKinds: vi.fn(async (_kinds: string[], _scope?: "background") => {}),
     removeFile: vi.fn(async (_id: number) => {}),
     compressPdf: vi.fn<
       (id: number, options: PdfOptions, onProgress?: (progress: Progress) => void) => Promise<PdfReport>
@@ -34,6 +38,12 @@ export function createApiMock() {
     compressImage: vi.fn<
       (id: number, options: RasterOptions, onProgress?: (progress: Progress) => void) => Promise<RasterReport>
     >(async (id) => imageReport(id)),
+    backgroundPreview: vi.fn(async (_id: number) => "data:image/png;base64,AA=="),
+    backgroundModelStatus: vi.fn<() => Promise<ModelStatus>>(async () => ({ installed: true, downloadBytes: 82537778 })),
+    downloadBackgroundModel: vi.fn<(callback: (progress: DownloadProgress) => void) => Promise<ModelStatus>>(async () => ({ installed: true, downloadBytes: 82537778 })),
+    removeBackgroundModel: vi.fn(async () => {}),
+    releaseBackgroundModel: vi.fn(async () => {}),
+    removeBackground: vi.fn<(id: number, options: BackgroundOptions) => Promise<BackgroundReport>>(async () => ({ originalSize: 1000000, outputSize: 2000000, width: 600, height: 400, originalPreview: "data:image/png;base64,AA==", preview: "data:image/png;base64,AA==" })),
     cancelCompression: vi.fn(async () => {}),
     saveResult: vi.fn<(id: number) => Promise<string | null>>(async () => null),
     saveResultsToFolder: vi.fn<(ids: number[]) => Promise<SavedFile[] | null>>(async () => null),

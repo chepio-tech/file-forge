@@ -53,6 +53,16 @@ pub enum AppError {
     /// Checking, downloading, verifying or installing an update failed; nothing was changed.
     #[error("update failed: {0}")]
     Update(String),
+    #[error("image exceeds background removal limits")]
+    BackgroundTooLarge,
+    #[error("unsupported background removal input: {0}")]
+    BackgroundUnsupported(String),
+    #[error("no subject found")]
+    NoSubject,
+    #[error("background model is not installed")]
+    ModelMissing,
+    #[error("background model download or verification failed: {0}")]
+    ModelDownload(String),
     #[error("i/o error: {0}")]
     Io(String),
     /// A background task panicked or was cancelled, or a result failed verification; the app keeps running.
@@ -81,6 +91,7 @@ impl From<RasterError> for AppError {
             RasterError::TooManyPixels { limit } => Self::ImageTooLarge(format!("{limit} pixels")),
             RasterError::Unsupported(format) => Self::ImageUnsupported(format),
             RasterError::Malformed(detail) => Self::ImageMalformed(detail),
+            RasterError::NoSubject => Self::NoSubject,
             RasterError::InvalidOptions(detail) => Self::InvalidOptions(detail),
             RasterError::Cancelled => Self::Cancelled,
             RasterError::Internal(detail) => Self::Internal(detail),

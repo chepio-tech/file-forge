@@ -1,0 +1,14 @@
+[package]
+name = "fileforge-segment"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+[dependencies]
+fileforge-core.workspace = true
+image = { version = "0.25", default-features = false }
+tract-onnx = "=0.23.8"
+tract-linalg = { version = "=0.23.8", features = ["multithread-mm"] }
+sha2 = "0.10"
+[lints]
+workspace = true

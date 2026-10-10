@@ -14,12 +14,20 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use fileforge_core::FileKind;
 use fileforge_core::file_kind::SNIFF_LEN;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 // Types
 use crate::error::AppError;
 use crate::folder_scan::{FolderScan, FolderScanner, ScanLimits, is_package};
 
 pub type FileId = u64;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FileScope {
+    #[default]
+    Compression,
+    Background,
+}
 
 /// What the UI knows about a registered file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -45,6 +53,7 @@ pub struct RegisterOutcome {
 
 #[derive(Debug, Clone)]
 pub struct RegisteredFile {
+    pub scope: FileScope,
     pub path: PathBuf,
     pub info: FileInfo,
 }
@@ -67,10 +76,15 @@ struct Inner {
 
 impl FileRegistry {
     /// Registers every path, skipping the ones that are not readable regular files.
+    #[cfg(test)]
     pub fn register_all(&self, paths: impl IntoIterator<Item = PathBuf>) -> RegisterOutcome {
+        self.register_all_scoped(paths, FileScope::Compression)
+    }
+
+    pub fn register_all_scoped(&self, paths: impl IntoIterator<Item = PathBuf>, scope: FileScope) -> RegisterOutcome {
         let mut outcome = RegisterOutcome::default();
         for path in paths {
-            match self.register(path.clone()) {
+            match self.register_scoped(path.clone(), scope) {
                 Ok(info) => outcome.files.push(info),
                 Err(_) => outcome.skipped.push(display_name(&path)),
             }
@@ -80,29 +94,50 @@ impl FileRegistry {
 
     /// Registers dropped files as they are, and from dropped folders the files whose extension belongs to `kinds`
     /// (ADR-0017). Packages count as files: a dropped package is skipped, not searched.
+    #[cfg(test)]
     pub fn register_dropped(&self, paths: impl IntoIterator<Item = PathBuf>, kinds: &[FileKind]) -> RegisterOutcome {
-        self.register_dropped_with_limits(paths, kinds, ScanLimits::DEFAULT)
+        self.register_dropped_scoped(paths, kinds, FileScope::Compression)
     }
 
+    pub fn register_dropped_scoped(
+        &self,
+        paths: impl IntoIterator<Item = PathBuf>,
+        kinds: &[FileKind],
+        scope: FileScope,
+    ) -> RegisterOutcome {
+        self.register_dropped_in_scope(paths, kinds, ScanLimits::DEFAULT, scope)
+    }
+
+    #[cfg(test)]
     fn register_dropped_with_limits(
         &self,
         paths: impl IntoIterator<Item = PathBuf>,
         kinds: &[FileKind],
         limits: ScanLimits,
     ) -> RegisterOutcome {
+        self.register_dropped_in_scope(paths, kinds, limits, FileScope::Compression)
+    }
+
+    fn register_dropped_in_scope(
+        &self,
+        paths: impl IntoIterator<Item = PathBuf>,
+        kinds: &[FileKind],
+        limits: ScanLimits,
+        scope: FileScope,
+    ) -> RegisterOutcome {
         let mut outcome = RegisterOutcome::default();
         let mut scanner = FolderScanner::new(kinds, limits);
         let mut unreadable = Vec::new();
         for path in paths {
             if !path.is_dir() || is_package(&path) {
-                match self.register(path.clone()) {
+                match self.register_scoped(path.clone(), scope) {
                     Ok(info) => outcome.files.push(info),
                     Err(_) => outcome.skipped.push(display_name(&path)),
                 }
                 continue;
             }
             for file in scanner.scan(&path, &mut unreadable) {
-                match self.register(file.clone()) {
+                match self.register_scoped(file.clone(), scope) {
                     Ok(info) => {
                         scanner.summary.added = scanner.summary.added.saturating_add(1);
                         outcome.files.push(info);
@@ -118,7 +153,12 @@ impl FileRegistry {
 
     /// Registers one file. Registering the same file twice returns the existing entry, so the UI can de-duplicate by
     /// id.
+    #[cfg(test)]
     pub fn register(&self, path: PathBuf) -> Result<FileInfo, AppError> {
+        self.register_scoped(path, FileScope::Compression)
+    }
+
+    pub fn register_scoped(&self, path: PathBuf, scope: FileScope) -> Result<FileInfo, AppError> {
         let path = path.canonicalize()?;
         let metadata = path.metadata()?;
         if !metadata.is_file() {
@@ -127,7 +167,7 @@ impl FileRegistry {
         let kind = FileKind::detect(path.extension().and_then(|e| e.to_str()), &read_head(&path)?);
 
         let mut inner = self.lock();
-        if let Some(existing) = inner.files.values().find(|f| f.path == path) {
+        if let Some(existing) = inner.files.values().find(|f| f.path == path && f.scope == scope) {
             return Ok(existing.info.clone());
         }
         inner.next_id += 1;
@@ -135,7 +175,7 @@ impl FileRegistry {
         inner.originals.insert(path.clone());
         #[cfg(unix)]
         inner.original_file_ids.insert((metadata.dev(), metadata.ino()));
-        inner.files.insert(info.id, RegisteredFile { path, info: info.clone() });
+        inner.files.insert(info.id, RegisteredFile { path, info: info.clone(), scope });
         Ok(info)
     }
 
@@ -196,6 +236,20 @@ mod tests {
         let path = dir.join(name);
         std::fs::write(&path, bytes).expect("test file must be writable");
         path
+    }
+
+    #[test]
+    fn each_tool_has_independent_ids_and_results_but_originals_stay_protected() {
+        let dir = tempfile::tempdir().expect("dir");
+        let path = write(dir.path(), "photo.png", b"image");
+        let registry = FileRegistry::default();
+        let compression = registry.register_scoped(path.clone(), FileScope::Compression).expect("compression");
+        let background = registry.register_scoped(path.clone(), FileScope::Background).expect("background");
+        assert_ne!(compression.id, background.id);
+        assert_eq!(background.id, registry.register_scoped(path.clone(), FileScope::Background).expect("dedup").id);
+        registry.remove(background.id);
+        assert!(registry.get(compression.id).is_ok());
+        assert!(matches!(registry.check_save_target(&path), Err(AppError::OriginalTarget)));
     }
 
     #[test]

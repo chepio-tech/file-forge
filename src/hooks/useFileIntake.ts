@@ -63,7 +63,10 @@ export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake
 
   useEffect(() => {
     // Without it dropped folders add nothing; directly dropped files still arrive, so a failure stays quiet.
-    if (active) fileforgeApi.setDropKinds(tool.accepts).catch(() => {});
+    if (active) {
+      const task = tool.id === "imageBackground" ? fileforgeApi.setDropKinds(tool.accepts, "background") : fileforgeApi.setDropKinds(tool.accepts);
+      task.catch(() => {});
+    }
   }, [active, tool]);
 
   useEffect(() => {
@@ -82,7 +85,7 @@ export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake
 
   const pick = useCallback(async () => {
     try {
-      accept(await fileforgeApi.pickFiles(tool.accepts, messages.intake.filterName(tool.formats)));
+      accept(await (tool.id === "imageBackground" ? fileforgeApi.pickFiles(tool.accepts, messages.intake.filterName(tool.formats), "background") : fileforgeApi.pickFiles(tool.accepts, messages.intake.filterName(tool.formats))));
     } catch (error) {
       setNotice([errorMessage(error)]);
     }

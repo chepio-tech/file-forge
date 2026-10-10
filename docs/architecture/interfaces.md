@@ -1,6 +1,6 @@
 # Interfaces (IPC)
 
-Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src-tauri/src/error.rs` (Rust) and
+Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/background.rs`, `src-tauri/src/drag_drop.rs`, `src-tauri/src/error.rs` (Rust) and
 `src/services/fileforgeApi.ts` (TS). This page holds the rules, not a copy of the signatures.
 
 ## Conventions
@@ -12,9 +12,10 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
   (`errors.*` in `src/messages/messages.ts`); `detail` is for diagnostics only and never shown verbatim.
 
 ## Commands and events today
-- `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`.
-- `set_drop_kinds(kinds)` — the shown tool's file kinds; dropped folders contribute only files with their
-  extensions (ADR-0017). Until set, folders contribute nothing.
+- `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`. Optional `scope: "background"`
+  gives this tool independent ids; omitted scope is compression. Re-adding the same file de-duplicates within its scope.
+- `set_drop_kinds(kinds, scope?)` — the shown tool's file kinds; dropped folders contribute only files with their
+  extensions (ADR-0017). The optional scope also applies to directly dropped files. Until set, folders contribute nothing.
 - `remove_file` — forget a registered file and its unsaved result.
 - `compress_pdf(id, options, onProgress)` → `PdfReport`. Options:
   `{ images: null | { jpegQuality, maxDpi | null, compressFlatePhotos }, stripMetadata, stripEditingData }`;
@@ -37,12 +38,23 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
   metadataRemoved }`; `kept` is `null` for a new result, otherwise why the original stays: `notSmaller`, `extraData`,
   `signed`, `animated`, `unsupportedEncoding` or `lossyEncoding` (a lossy WebP and no WebP quality). Progress stages:
   `loading`, `encoding`, `verifying`. The format comes from the file's content, and the result keeps it.
-- `cancel_compression` — cancels every compression (PDF or image) already started at its next checkpoint; those reject with
+- `background_model_status` → `{ installed, downloadBytes }`; verifies the two pinned model files.
+- `download_background_model(onProgress)` — explicit download into app-local data; progress channel sends
+  `{ downloaded, total }`. Sizes and SHA-256 must match before atomic publication; failed partials are removed.
+- `remove_background_model` — removes model files and frees inference state; existing results remain savable.
+- `release_background_model` — frees the loaded graphs and last embedding when the tool is hidden.
+- `background_preview(id)` — oriented original as a PNG byte array, at most 512 pixels on its longest side.
+- `remove_background(id, options)` → `{ originalSize, outputSize, width, height, originalPreview, preview }`.
+  Options: `{ format: "png" | "webp", background: [r,g,b] | null, crop: boolean, point: [x,y] | null }`.
+  A point is finite and normalized to 0..1 in the oriented full original. `null` uses the center and the largest
+  multimask; a click uses predicted IoU. Previews are bounded PNG byte arrays; the typed client converts them to
+  data URLs. Only ids from the background scope are accepted. Results can be larger than the input (ADR-0022).
+- `cancel_compression` — cancels every processing or model-download operation already started at its next checkpoint; those reject with
   `cancelled`. Later calls are unaffected; a no-op when nothing runs.
 - `save_result(id)` — native save dialog next to the original, filtered to the result's format → saved file name,
   or `null` if cancelled.
   Choosing any session input (including aliases, macOS case variants and files removed from the list) returns `originalTarget`.
-- `save_results_to_folder(ids)` — folder picker, `<name>-compressed.<ext>` without overwriting → `SavedFile[]` or
+- `save_results_to_folder(ids)` — folder picker, `<name>-compressed.<ext>` (compression) or `<name>-cutout.<ext>` (background removal) without overwriting → `SavedFile[]` or
   `null`. `<ext>` is `pdf`, `png`, `webp`, or `jpg` (`jpeg` when the original used it).
 - `reveal_result(id)` — show the last saved copy in the file manager.
 - `check_for_update` → `{ currentVersion, availableVersion | null }`; remembers the found update in Rust (ADR-0013).
@@ -57,6 +69,8 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/drag_drop.rs`, `src
 Error codes: `unknownFile`, `noResult`, `originalTarget`, `notAFile`, `pdfTooLarge`, `pdfEncrypted`, `pdfSigned`, `pdfMalformed`,
 `imageTooLarge` (bytes or pixels, named in `detail`), `imageUnsupported` (not JPEG, PNG or WebP by content; `detail` names the
 format when known), `imageMalformed`,
+`backgroundTooLarge` (32 MP/256 MB), `backgroundUnsupported` (animation or unsupported JPEG coding),
+`modelMissing`, `modelDownload` (download or integrity failure), `noSubject` (click the original to retry),
 `invalidOptions`, `cancelled`, `busy`, `unsavedResults`, `update`, `io`, `internal`.
 
 ## Compatibility

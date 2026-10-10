@@ -188,3 +188,25 @@ Encoder settings were chosen with cwebp 1.6.0 on these files: lossless level 9 t
 smaller than method 4 on photos for 1.3–1.6× the time; with exact alpha it took 10–30× longer (5.2 s on a 3.5 MP
 frame) for 4–7%, so images with alpha use method 5. Maximum re-encodes files saved at cwebp's default quality 75 again
 at 75: 8–18% smaller, at the cost of a second generation of loss; Balanced leaves them.
+
+## Background removal (ADR-0022)
+The shell takes the existing work slot, reads at most 256 MB plus one byte, decodes at most 32 MP with orientation,
+and hashes the source. SAM 2.1 runs on a dedicated pool of at most four threads. The last source's embedding is
+retained by content hash, so selecting another subject runs only the decoder. Automatic selection uses the center
+point and largest multimask; clicks use predicted IoU. Logits are sampled bilinearly without clamping, and a
+bounded-grid color-guided regression produces antialiased alpha, with soft-edge foreground color recovery. Existing
+alpha is multiplied, hidden RGB zeroed, then crop and solid composition are applied. Lossless PNG/WebP output is decoded again before atomic temp storage.
+
+Cancellation is checked before/after inference, for each render row and during WebP encoding. Individual tract
+inference and PNG codec calls finish before the next checkpoint. Failed downloads clean their partial file;
+a successfully downloaded first graph can be reused after a second-graph failure. Download cancellation is checked
+between chunks; a stalled request reaches its 15-second connect/read timeout before returning. Hiding the tool unloads the
+model and last embedding after current work finishes; removing the model preserves completed temp results.
+
+On the owner's M1 Pro, debug engine with optimized dependencies, release model files, two public test fixtures:
+graph load 0.56 s, encoder 2.43–2.50 s, decoder 0.09–0.16 s. These are fixture measurements, not a broad quality or
+performance benchmark. The model download is 82,537,778 bytes; graph files are not bundled in installers.
+
+Real-model plus refinement peak RSS measured on the two small fixtures: 1,932,902,400 bytes (about 1.8 GiB).
+Larger images add source/output buffers; the 32 MP limit is conservative and is not a measured worst-case guarantee.
+Refinement coefficients use at most a 1024-pixel grid; cancellation is checked on every statistics/render row.

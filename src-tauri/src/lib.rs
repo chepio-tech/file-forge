@@ -1,12 +1,14 @@
 //! FileForge desktop shell: wires plugins, state, IPC commands and window events. Processing lives in
 //! `fileforge-core`.
 
+mod background;
 mod commands;
 mod drag_drop;
 mod error;
 mod file_registry;
 mod folder_scan;
 mod job_control;
+mod models;
 mod results;
 mod updates;
 
@@ -32,9 +34,16 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_cache_dir()?.join("results");
             app.manage(ResultStore::open(dir)?);
+            app.manage(models::Models::new(app.path().app_local_data_dir()?.join("models").join(models::MODEL_TAG)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            background::background_model_status,
+            background::background_preview,
+            background::download_background_model,
+            background::remove_background_model,
+            background::release_background_model,
+            background::remove_background,
             commands::pick_files,
             commands::set_drop_kinds,
             commands::remove_file,

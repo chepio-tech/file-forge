@@ -40,6 +40,30 @@ export interface RegisterOutcome {
   folders?: FolderScan;
 }
 
+export interface BackgroundOptions {
+  format: "png" | "webp";
+  background: [number, number, number] | null;
+  crop: boolean;
+  point: [number, number] | null;
+}
+
+export interface BackgroundReport {
+  originalSize: number;
+  outputSize: number;
+  width: number;
+  height: number;
+  originalPreview: string;
+  preview: string;
+}
+export interface ModelStatus { installed: boolean; downloadBytes: number }
+export interface DownloadProgress { downloaded: number; total: number }
+
+function imageData(bytes: number[]): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `data:image/png;base64,${btoa(binary)}`;
+}
+
 export interface ImageOptions {
   /** 30–95, see `JPEG_QUALITY_RANGE` in `crates/fileforge-core/src/pdf/options.rs`. */
   jpegQuality: number;
@@ -148,6 +172,11 @@ export type AppErrorCode =
   | "busy"
   | "unsavedResults"
   | "update"
+  | "backgroundTooLarge"
+  | "backgroundUnsupported"
+  | "noSubject"
+  | "modelMissing"
+  | "modelDownload"
   | "io"
   | "internal";
 
@@ -164,11 +193,11 @@ export function isAppError(value: unknown): value is AppError {
 
 const fileforgeApi = {
   /** Opens the native file dialog filtered to `kinds`; resolves with an empty outcome when the user cancels. */
-  pickFiles: (kinds: FileKind[], filterName: string) =>
-    invoke<RegisterOutcome>("pick_files", { kinds, filterName }),
+  pickFiles: (kinds: FileKind[], filterName: string, scope?: "background") =>
+    invoke<RegisterOutcome>("pick_files", { kinds, filterName, scope }),
 
   /** Kinds that dropped folders contribute; the shown tool sets them. Directly dropped files are not filtered. */
-  setDropKinds: (kinds: FileKind[]) => invoke<void>("set_drop_kinds", { kinds }),
+  setDropKinds: (kinds: FileKind[], scope?: "background") => invoke<void>("set_drop_kinds", { kinds, scope }),
 
   /** Forgets the file and its unsaved result. */
   removeFile: (id: FileId) => invoke<void>("remove_file", { id }),
@@ -186,6 +215,17 @@ const fileforgeApi = {
   compressImage: (id: FileId, options: RasterOptions, onProgress: (progress: Progress) => void = () => {}) => {
     const channel = new Channel<Progress>(onProgress);
     return invoke<RasterReport>("compress_image", { id, options, onProgress: channel });
+  },
+
+  backgroundPreview: async (id: FileId) => imageData(await invoke<number[]>("background_preview", { id })),
+  backgroundModelStatus: () => invoke<ModelStatus>("background_model_status"),
+  downloadBackgroundModel: (onProgress: (progress: DownloadProgress) => void) =>
+    invoke<ModelStatus>("download_background_model", { onProgress: new Channel<DownloadProgress>(onProgress) }),
+  removeBackgroundModel: () => invoke<void>("remove_background_model"),
+  releaseBackgroundModel: () => invoke<void>("release_background_model"),
+  removeBackground: async (id: FileId, options: BackgroundOptions): Promise<BackgroundReport> => {
+    const report = await invoke<Omit<BackgroundReport, "preview" | "originalPreview"> & { preview: number[]; originalPreview: number[] }>("remove_background", { id, options });
+    return { ...report, preview: imageData(report.preview), originalPreview: imageData(report.originalPreview) };
   },
 
   /** Stops every compression already started at its next checkpoint; a no-op when nothing runs. */

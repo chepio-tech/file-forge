@@ -13,6 +13,8 @@ pub enum RasterError {
     Unsupported(String),
     #[error("the file is not a readable image: {0}")]
     Malformed(String),
+    #[error("no subject found; click the subject in the original preview")]
+    NoSubject,
     #[error("invalid options: {0}")]
     InvalidOptions(String),
     /// The caller's [`crate::control::Control`] asked to stop; nothing was produced.

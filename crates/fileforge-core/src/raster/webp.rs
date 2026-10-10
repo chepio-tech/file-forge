@@ -47,6 +47,20 @@ const FLAG_EXIF: u8 = 0x08;
 const FLAG_XMP: u8 = 0x04;
 const FLAG_ANIMATION: u8 = 0x02;
 
+/// Validate the container before editing: the decoder must not silently discard source alpha.
+pub(super) fn background_dimensions(input: &[u8]) -> Result<(u32, u32), RasterError> {
+    let riff = Riff::parse(input)?;
+    let flags = riff.flags();
+    if flags & FLAG_ANIMATION != 0 || riff.has(ANIM) || riff.has(ANMF) {
+        return Err(RasterError::Unsupported("animated WebP".into()));
+    }
+    let image = riff.image()?;
+    if riff.chunks.first().is_some_and(|chunk| chunk.id == VP8X) && flags & FLAG_ALPHA == 0 && image.alpha {
+        return Err(RasterError::Unsupported("WebP alpha flag differs from image data".into()));
+    }
+    riff.size()
+}
+
 pub(super) fn compress(
     input: &[u8],
     options: &RasterOptions,

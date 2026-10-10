@@ -16,7 +16,8 @@ in `crates/fileforge-core/tests/fixtures/` are CC0 and public domain.
 
 Both graphs equal `SAM2ImagePredictor` (`set_image`, then `_predict` with all four mask tokens); the script's
 docstring lists the rewrites tract needs and the chunked global attention that halves the encoder's peak memory. Large weights are stored as float16 and cast to float32 at load, which
-halves the download (about 82 MB instead of 150 MB); masks agree with full-precision PyTorch at IoU ≥ 0.999.
+halves the download (about 82 MB instead of 150 MB). The v1 export measured a minimum mask IoU of 0.9986 against
+full-precision PyTorch on the two fixtures; the export gate requires at least 0.98 for every tested mask.
 
 ## Run it locally
 ```sh

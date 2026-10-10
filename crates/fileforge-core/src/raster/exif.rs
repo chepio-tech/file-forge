@@ -30,7 +30,7 @@ pub(crate) fn rotation(tiff: &[u8]) -> Option<Orientation> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Orientation {
-    value: u16,
+    pub(crate) value: u16,
     big_endian: bool,
 }
 

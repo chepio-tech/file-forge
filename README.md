@@ -31,7 +31,7 @@ Builds are not signed yet:
 
 <img src="docs/assets/app-icon.png" alt="FileForge app icon" width="112" height="112" />
 
-Desktop PDF and image compression, entirely on your computer. Built for macOS, Windows and Linux.
+Desktop PDF and image compression and image background removal, entirely on your computer. Built for macOS, Windows and Linux.
 Format conversion, video and audio tools are planned; they are shown as **Soon** in the app.
 
 ## What works
@@ -51,9 +51,13 @@ Format conversion, video and audio tools are planned; they are shown as **Soon**
   re-encode JPEGs and lossy WebPs only when that saves at least 2%; PNGs and lossless WebPs always stay lossless.
   Metadata stays unless you remove it; color profiles and photo orientation always stay. Signed (Content
   Credentials), animated and HDR gain-map files are returned unchanged.
+- Remove image backgrounds with SAM 2.1 hiera-tiny (Apache-2.0), downloaded once after your click (about 83 MB).
+  Work offline after that: automatic subject, click or keyboard coordinates to pick another, transparent PNG/WebP
+  or a solid color, optional crop, previews and batch saving. Up to 32 MP/256 MB; 16-bit PNG becomes 8-bit.
+  Fine hair and translucent objects may need additional manual editing.
 - Follow each file's progress, cancel a running batch, and compare original/result sizes per file and for the
   batch, then save one result or all results to a folder.
-- Keep originals untouched. Results are never larger; encrypted and digitally signed PDFs are refused.
+- Keep originals untouched. Compression results are never larger; cutouts show their actual sizes; encrypted and digitally signed PDFs are refused.
 - Work locally, with system light/dark themes and no file uploads.
 - Update from inside the app: FileForge checks the latest GitHub release at startup or on request and installs a
   newer, signature-verified version only when you choose **Restart to update**. The check sends no files.

@@ -17,9 +17,9 @@ use tauri_plugin_opener::OpenerExt;
 // Types
 use crate::drag_drop::DropKinds;
 use crate::error::AppError;
-use crate::file_registry::{FileId, FileRegistry, RegisterOutcome};
+use crate::file_registry::{FileId, FileRegistry, FileScope, RegisterOutcome};
 use crate::job_control::{Cancellation, JobControl};
-use crate::results::{ResultStore, copy_result, copy_result_to_folder, output_name};
+use crate::results::{ResultStore, copy_result, copy_result_to_folder, output_name_with_suffix};
 use crate::updates::{self, UpdateStatus};
 
 /// Opens the native "open files" dialog filtered to `kinds` and registers the picked files.
@@ -29,6 +29,7 @@ pub async fn pick_files(
     app: AppHandle,
     kinds: Vec<FileKind>,
     filter_name: String,
+    scope: Option<FileScope>,
 ) -> Result<RegisterOutcome, AppError> {
     let extensions: Vec<&str> = kinds.iter().flat_map(|kind| kind.extensions()).copied().collect();
     let mut dialog = app.dialog().file();
@@ -40,7 +41,7 @@ pub async fn pick_files(
     tauri::async_runtime::spawn_blocking(move || {
         let paths =
             dialog.blocking_pick_files().unwrap_or_default().into_iter().filter_map(|file| file.into_path().ok());
-        app.state::<FileRegistry>().register_all(paths)
+        app.state::<FileRegistry>().register_all_scoped(paths, scope.unwrap_or_default())
     })
     .await
     .map_err(AppError::from)
@@ -49,8 +50,8 @@ pub async fn pick_files(
 /// Sets the kinds dropped folders contribute; the tool that is shown calls it (ADR-0017). Cheap and non-blocking, so
 /// it runs synchronously.
 #[tauri::command]
-pub fn set_drop_kinds(drop_kinds: State<'_, DropKinds>, kinds: Vec<FileKind>) {
-    drop_kinds.set(kinds);
+pub fn set_drop_kinds(drop_kinds: State<'_, DropKinds>, kinds: Vec<FileKind>, scope: Option<FileScope>) {
+    drop_kinds.set_scoped(kinds, scope.unwrap_or_default());
 }
 
 /// Forgets a file the user removed from the list, together with its unsaved result.
@@ -87,6 +88,9 @@ pub async fn compress_pdf(
             return Err(AppError::Cancelled);
         }
         let file = app.state::<FileRegistry>().get(id)?;
+        if file.scope != FileScope::Compression {
+            return Err(AppError::InvalidOptions("file belongs to another tool".into()));
+        }
         let input = read_input(&file.path, pdf::MAX_INPUT_BYTES, AppError::PdfTooLarge)?;
         // A closed webview cannot receive progress; the compression itself still completes.
         let control = JobControl::new(&cancellation, ticket, |progress| drop(on_progress.send(progress)));
@@ -116,6 +120,9 @@ pub async fn compress_image(
             return Err(AppError::Cancelled);
         }
         let file = app.state::<FileRegistry>().get(id)?;
+        if file.scope != FileScope::Compression {
+            return Err(AppError::InvalidOptions("file belongs to another tool".into()));
+        }
         let input =
             read_input(&file.path, raster::MAX_INPUT_BYTES, |limit| AppError::ImageTooLarge(format!("{limit} bytes")))?;
         let control = JobControl::new(&cancellation, ticket, |progress| drop(on_progress.send(progress)));
@@ -168,7 +175,7 @@ pub async fn save_result(app: AppHandle, id: FileId) -> Result<Option<String>, A
         let mut dialog = app
             .dialog()
             .file()
-            .set_file_name(output_name(&file.info.name, result.extension))
+            .set_file_name(output_name_with_suffix(&file.info.name, result.extension, result.suffix))
             .add_filter(filter, extensions);
         if let Some(parent) = file.path.parent() {
             dialog = dialog.set_directory(parent);
@@ -212,7 +219,11 @@ pub async fn save_results_to_folder(app: AppHandle, ids: Vec<FileId>) -> Result<
         for id in ids {
             let file = registry.get(id)?;
             let result = results.get(id).ok_or(AppError::NoResult(id))?;
-            let target = copy_result_to_folder(&result, &folder, &output_name(&file.info.name, result.extension))?;
+            let target = copy_result_to_folder(
+                &result,
+                &folder,
+                &output_name_with_suffix(&file.info.name, result.extension, result.suffix),
+            )?;
             saved.push(SavedFile { id, name: display_name(&target) });
             results.mark_saved(id, target);
         }
@@ -246,7 +257,7 @@ fn display_name(path: &std::path::Path) -> String {
 }
 
 /// Limit the actual read as well as metadata: a file can grow after registration or after the size check.
-fn read_input(path: &Path, limit: u64, too_large: impl Fn(u64) -> AppError) -> Result<Vec<u8>, AppError> {
+pub(crate) fn read_input(path: &Path, limit: u64, too_large: impl Fn(u64) -> AppError) -> Result<Vec<u8>, AppError> {
     if !path.metadata()?.is_file() {
         return Err(AppError::NotAFile(display_name(path)));
     }

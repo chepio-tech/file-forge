@@ -1,116 +1,90 @@
-# ADR-0022: Background removal with SAM 2.1 hiera-tiny in tract, downloaded on first use
+# ADR-0022: Local background removal with SAM 2.1 and a model downloaded on demand
 
 ## Status
-Proposed — awaiting the owner's review. Written on 2026-10-09 by the cloud agent implementing steps A–F, which lands
-them in separate pull requests. The owner's plan file (`plans/0016-background-removal.md`) was not available to it,
-so every decision beyond the roadmap line (model, tract, download on first use, automatic subject plus click,
-transparent PNG/WebP or solid color, optional crop) is the agent's proposal and needs confirmation.
+Accepted. The owner approved SAM 2.1, automatic selection plus click, download-on-click delivery and tract in
+October 2026; tract-onnx was explicitly approved on 2026-10-10 to use the existing reproducible export.
 
 ## Date
-2026-10-09
+2026-10-10
 
 ## Context
-The owner asked for "Remove background" on 2026-10-08 and fixed its shape: SAM 2.1 hiera-tiny run through tract, the
-model downloaded on first use, an automatic subject with a click to pick another, a transparent PNG/WebP or a solid
-color, and an optional crop. ADR-0021 excluded ISNet, BiRefNet and their derivatives because of their training data.
-
-SAM 2.1 hiera-tiny (Meta) has Apache-2.0 weights trained on Meta's own SA-1B and SA-V data, which ADR-0021 accepts. It
-is a promptable segmenter, not a background remover: it needs points or a box and has no notion of "the subject".
-tract (Sonos, MIT/Apache-2.0) is a pure-Rust inference engine; the app already forbids `unsafe` code in its own crates
-(ADR-0020) and parses untrusted files only in safe Rust (ADR-0015, ADR-0019).
-
-A spike on 2026-10-09 (cloud container, 4 vCPU Xeon) established:
-- SAM 2's own ONNX export does not run in tract 0.23.8 (its batch-size `expand`s crash tract's axis optimizer; in-place
-  coordinate writes become ScatterND). Three wrapper rewrites with identical math fix it; the graphs then match
-  PyTorch within 6·10⁻⁵ on mask logits, for any number of prompt points.
-- Load ≈ 0.9 s (both graphs), image encoder 5–7 s per image on that VM (1–4 threads), mask decoder 125–170 ms per
-  prompt. Desktop CPUs are expected to be faster; no Apple Silicon measurement exists yet.
-- Storing the weights as float16 (computing in float32) makes the download 82 MB instead of about 150 MB; masks
-  stay within IoU 0.999 of full precision.
-- tract materializes attention matrices: Hiera's three global-attention blocks (4,096 tokens, 4 heads) need 256 MiB
-  each, packed twice, and set the encoder's peak at about 0.8 GB. Computing them in 8 query chunks gives identical
-  outputs with about 0.45 GB less peak memory (measured on one block; the full encoder is an estimate).
+Background removal changes content and can turn a small JPEG into a larger transparent PNG. Compression's
+never-larger rule remains unchanged; this tool needs previews and actual sizes. The model is large enough that
+bundling it would dominate every installer and updater download. ADR-0021 requires commercial-use rights.
 
 ## Decision
-- **Model files (step A).** `tools/model-export/export_sam2.py` exports the image encoder and mask decoder of
-  `SAM2ImagePredictor` from Meta's checkpoint (sam2 commit `2b90b9f`) to ONNX opset 17 with the three tract rewrites,
-  chunked global attention and float16-stored weights (contract `sam2.1-hiera-tiny/1`, see the tool's README). It checks ONNX Runtime against
-  PyTorch and writes reference tensors. The manual `model-release` workflow downloads the checkpoint from Meta and from
-  Hugging Face, requires identical bytes, exports, checks ONNX Runtime and the app's own engine
-  (`tests/background_model.rs`), and creates a **draft prerelease** `models/sam2.1-hiera-tiny-v1` with the two files,
-  `manifest.json`, `SHA256SUMS` and SAM 2's Apache-2.0 license. The owner reviews and publishes it as a prerelease,
-  so `releases/latest` stays the app release that the README buttons and the updater read (ADR-0009, ADR-0013).
-- **Delivery (step D).** The app pins each file's size and SHA-256 (`src-tauri/src/models.rs`). The model is
-  downloaded only when the user clicks "Download model" in the tool, over HTTPS from the release, into the app's
-  local data folder, as a temp file checked for its exact size and hash before it is renamed into place. Files are
-  verified again once per session before loading. Until the release is pinned, release builds show the model as not
-  available; debug builds can use a local export through `FILEFORGE_BACKGROUND_MODEL_DIR` for the smoke test.
-- **Engine (step B).** `fileforge-core::background` decodes JPEG, PNG and WebP in safe Rust (orientation applied, CMYK
-  and animated files refused, at most 64 MP), resizes to 1024×1024 like SAM 2, runs the encoder once per image and
-  the decoder per prompt in tract, with matmul threads from a pool owned by the engine (no global state). Mask choice
-  follows `SAM2ImagePredictor`: a single click takes the best of the three multimask outputs by predicted IoU;
-  several points take the single-mask output unless it is unstable.
-- **Automatic subject and clicks (step B).** See "Automatic subject" below. A click replaces the subject with the
-  object under the pointer.
-- **Cutout (step C).** Mask logits become alpha with SAM 2's small-island and small-hole cleanup on the 256×256 grid
-  and a one-pixel anti-aliased ramp computed from the logits' gradient (exact for straight edges, no blur). Pixels
-  with zero alpha get zero color, so the removed background cannot be recovered from the file. Output: PNG (lossless)
-  or WebP (lossless or lossy with exact alpha) with the ICC profile; other metadata is dropped. A solid color is
-  composited in 8-bit sRGB. "Crop to subject" crops to the alpha's bounding box plus 2% of the longer side. Every
-  result is decoded again before use.
-- **Shell and UI (steps E, F).** A "Remove background" tool in the Images group with its own file list. Files are
-  registered per tool, so the compression tool and this tool never share ids or results. The selected file shows a
-  preview on a checkerboard; clicking it picks the subject; "Automatic" returns to the automatic subject. Results are
-  rendered when saved, as `<name>-cutout.png|webp`, through the existing save and reveal commands.
-- **Not done (needs the owner).** An edge-aware refinement (fast guided filter, gated, plus "blur-fusion" color
-  decontamination) measured large gains on hair and fur in synthetic tests (solid-edge alpha MSE 25.6·10⁻³ → 0.6·10⁻³).
-  Its patent status could not be verified — a related US 9286663 ("filtering an image using a guidance image")
-  exists — so it is not shipped.
+Use Meta's SAM 2.1 hiera-tiny (Apache-2.0 weights, trained on Meta's own SA-1B and SA-V data) through tract-onnx
+0.23.8 and tract-linalg (MIT/Apache-2.0). Core defines a segmenter port without ML dependencies; a separate
+fileforge-segment crate implements normalized 1024-square input, encoder embeddings and prompted mask decoding.
+An owned pool caps inference at four threads. One content-keyed embedding is cached and cleared when the tool is
+hidden or the model removed.
 
-### Automatic subject
-SAM 2 needs prompts, so "the subject" is chosen by running the decoder on a fixed set of prompts and ranking the
-candidate masks by SAM's own predicted quality and stability plus image-independent cues (how much of the frame
-border a mask touches, how central and how large it is). The exact prompts, weights and thresholds are fixed with the
-engine, measured on commercially usable images only (ADR-0021), and recorded here then. When no candidate is
-confident, the tool says so and asks for a click.
+Automatic selection uses a positive center point and the largest of the three multimasks, as chosen after the
+owner's spike. A click selects the multimask with highest predicted IoU. The original preview and keyboard
+coordinates always refer to the full oriented image, including when the output is cropped. Originals can be
+previewed and clicked before inference, so an off-center subject does not depend on automatic success.
+
+The existing export tool builds two ONNX opset-17 graphs from Meta's official checkpoint and checks them against
+unmodified PyTorch. Chunked attention reduces memory; float16-stored weights compute in float32. Model files live
+in the dedicated immutable prerelease models/sam2.1-hiera-tiny-v1. The app pins their exact sizes and SHA-256 and
+downloads them only on an explicit click, into app-local data via verified staging files. The owner approved direct
+rustls with the already locked ring provider (MIT/Apache-2.0/ISC) on 2026-10-10; model downloads initialize TLS
+independently of update checks. The download sends no
+user-file information. Prereleases never replace the latest desktop release.
+
+Safe Rust decoders apply orientation and bound inputs to 256 MB/32 MP. Animation, CMYK and 16-bit JPEG are refused;
+16-bit PNG is reduced to 8-bit. WebP containers that would silently discard source alpha are refused. Bilinear
+logits and color-guided local regression give antialiased alpha. Coefficients are computed on a maximum 1024-pixel
+grid and evaluated with original-resolution colors. Confident mask regions remain fixed.
+Soft-edge RGB is recovered with local foreground/background priors and a regularized alpha-compositing equation.
+Source alpha is multiplied; fully transparent RGB is zero and fully retained RGB stays exact. Optional crop adds 2%
+padding; a solid color is composited afterwards. Lossless PNG/WebP output keeps ICC, drops other metadata and is
+decoded again before use. Fine hair and translucent surfaces remain a visible limitation; there is no separate
+matting model or brush editor in this version.
+
+The UI follows the existing batch tool layout. Registry ids and temp results are independent from compression.
+Results use the suffix -cutout and existing protected, atomic save/reveal commands. Previews are PNG byte arrays
+bounded to 512 pixels, converted to data URLs by the typed client. Cutout sizes can exceed input sizes; no savings
+percentage is shown. Subject choices persist per file when output settings change. Failed status and preview
+requests can be retried. Model management, inference and saves share one work slot, also blocking restart for updates.
 
 ## Rationale
-The model and engine were fixed by the owner; the rest follows the app's existing rules. Downloading on demand keeps
-the installers small and never contacts the network without a user action. Pinned hashes make the download host
-irrelevant to integrity and tie every installed version to exact model bytes. Keeping preprocessing, mask choice
-and alpha in Rust leaves the graphs as plain networks that ONNX Runtime and PyTorch can check.
+The export already exists and the owner approved tract-onnx instead of an additional NNEF conversion. CPU-only
+inference works across all desktop targets. Download-on-demand keeps installers small and supports offline work
+once installed. Exact pins prevent incorrect, modified or partial graphs from reaching the parser. A cached
+embedding makes another subject selection inexpensive.
 
 ## Alternatives considered
-- **Bundling the model:** +82 MB in every installer and update for a feature not every user needs.
-- **SAM 2's own export or ONNX Runtime:** ONNX Runtime is a C++ binary dependency outside the app's safe-Rust rule;
-  the original export does not run in tract.
-- **A sigmoid of the logits as alpha:** measured 20–260 px of blur on large photos; the gradient ramp is exact.
-- **Hosting the model elsewhere (Hugging Face, a separate repository):** another host or repository to secure; the
-  pinned hash makes GitHub releases sufficient.
+- NNEF: a smaller parser, but another conversion/validation step before release.
+- Bundled weights: about 83 MB added to every installer and update, even when the tool is unused.
+- ONNX Runtime: another native runtime and FFI boundary; tract keeps the adapter in safe Rust.
+- Third-party guided-filter and foreground-estimation source: excluded where commercial-use licensing is absent.
+  The implementation is original Rust from the mathematical filter and compositing equations.
+- Highest predicted IoU for automatic selection: the owner's spike picked parts of the subject; largest-mask
+  selection found whole subjects. Clicks provide an explicit correction for ambiguous or off-center photos.
 
 ## Consequences
-- New dependencies: `tract-onnx` 0.23.8 and `tract-linalg` (MIT/Apache-2.0); tract contains SIMD `unsafe` code. It
-  only receives tensors the engine built and model files pinned by hash.
-- The app makes a second kind of network request, only on the user's click: the model download from GitHub.
-- Background removal needs about 1 GB of memory for a 48 MP photo; images above 64 MP are refused.
-- A new export or model is a new release tag and new pins; published model files never change.
+A first use needs a model download. Images and result sizes are bounded, but segmentation cannot identify every
+intended subject or preserve all fine hair; the UI exposes the original, result and correction controls. The last
+embedding and graphs consume memory while this tool is visible. A different export requires a new model tag and
+new app pins; published assets never change. The only new network action is a model download after a click.
 
 ## Validation / fitness criteria
-- `tests/background_model.rs` (run by the model-release workflow and locally with a model): tract matches ONNX
-  Runtime's reference tensors; the app's preprocessing gives the reference masks; the automatic subject on the CC0
-  fixtures is confident and plausible; PNG and WebP render end to end.
-- Engine unit tests without a model: decoding and limits, coordinate transforms, mask choice, the alpha ramp and
-  cleanup against exact geometry, output rules (zero color under zero alpha, opaque pixels unchanged).
-- Shell tests: download verification (size, hash, cancel, partial files removed), per-tool file scoping, result
-  naming.
+Core fake-segmenter tests cover alpha, opaque RGB, hidden RGB, orientation, crop, solid composition, output codecs,
+cancellation, malformed images/masks and invalid points. Shell tests cover scoped ids, cutout names and partial,
+corrupt, oversized and cancelled downloads. UI tests cover explicit model download, offline/error states, batch
+processing, coordinate prompts, output changes and saving. The optional background_model test runs the release
+files and compares raw tract masks with ONNX Runtime references when present; real-model tests must pass before
+publication. Standard CI has no model files.
 
 ## Reconsider when
-- The owner clears the guided-filter refinement, or a commercially usable matting model appears.
-- Apple Silicon or Windows measurements show the encoder too slow; then consider a smaller input size or a faster
-  engine.
+A commercially usable matting model or validated refinement can substantially improve hair and translucent
+objects; platform measurements justify a faster inference engine or changed input/memory limits.
 
 ## References
-- SAM 2: https://github.com/facebookresearch/sam2 (code, checkpoints, Apache-2.0)
-- tract: https://github.com/sonos/tract
-- K. He, J. Sun, X. Tang, "Guided Image Filtering", ECCV 2010 / TPAMI 2013; M. Forte, F. Pitié, "Approximate Fast
-  Foreground Colour Estimation", ICIP 2021 (not implemented, see Decision)
+- SAM 2 and its license: https://github.com/facebookresearch/sam2
+- tract and licenses: https://github.com/sonos/tract
+- Model contract and reproducible export: tools/model-export/README.md
+- Commercial-use policy: ADR-0021
+
+- Color-guided filtering: https://arxiv.org/abs/1505.00996; He, Sun and Tang, Guided Image Filtering, TPAMI 2013.
