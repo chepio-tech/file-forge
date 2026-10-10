@@ -1,0 +1,89 @@
+# Builds the background-removal model files (ADR-0022) from Meta's official SAM 2.1 hiera-tiny checkpoint, checks them
+# against SAM 2 in PyTorch with ONNX Runtime, and attaches them to a draft prerelease. Nothing is published: the owner
+# reviews the draft and publishes it, which makes it immutable (ADR-0010). A prerelease never becomes
+# `releases/latest`, so the README downloads and the updater keep pointing at the app release.
+# Run it from Actions → model-release → Run workflow. See tools/model-export/README.md.
+name: model-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag for the model files
+        required: true
+        default: models/sam2.1-hiera-tiny-v1
+
+permissions:
+  contents: read
+
+env:
+  # facebookresearch/sam2 main on 2024-12-15: the SAM 2.1 configs and model code the export was verified with.
+  SAM2_COMMIT: 2b90b9f5ceec907a1c18123530e92e794ad901a4
+  CHECKPOINT_META: https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt
+  CHECKPOINT_HF: https://huggingface.co/facebook/sam2.1-hiera-tiny/resolve/main/sam2.1_hiera_tiny.pt
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          # `v*` tags publish app releases (release.yml); model tags must never match them.
+          if [[ ! "$TAG" =~ ^models/[a-z0-9.-]+-v[0-9]+$ ]]; then
+            echo "::error::The tag must look like models/<model>-v<N>, got '$TAG'"
+            exit 1
+          fi
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install the export environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+          python -m pip install -r tools/model-export/requirements.txt
+      - name: Fetch SAM 2 at the pinned commit
+        run: |
+          git init sam2
+          git -C sam2 fetch --depth 1 https://github.com/facebookresearch/sam2.git "$SAM2_COMMIT"
+          git -C sam2 checkout --detach FETCH_HEAD
+          test "$(git -C sam2 rev-parse HEAD)" = "$SAM2_COMMIT"
+      - name: Download the checkpoint from Meta and from Hugging Face
+        run: |
+          # Two independent origins must serve the same bytes before anything is built from them.
+          curl --fail --location --proto '=https' --tlsv1.2 -o meta.pt "$CHECKPOINT_META"
+          curl --fail --location --proto '=https' --tlsv1.2 -o hf.pt "$CHECKPOINT_HF"
+          meta=$(sha256sum meta.pt | cut -d' ' -f1)
+          hf=$(sha256sum hf.pt | cut -d' ' -f1)
+          echo "Meta: $meta"
+          echo "Hugging Face: $hf"
+          if [ "$meta" != "$hf" ]; then
+            echo "::error::The two checkpoint downloads differ"
+            exit 1
+          fi
+          mv meta.pt sam2.1_hiera_tiny.pt
+          rm hf.pt
+      - name: Export and check against PyTorch
+        run: |
+          python tools/model-export/export_sam2.py --sam2 sam2 --checkpoint sam2.1_hiera_tiny.pt --out model \
+            --image crates/fileforge-core/tests/fixtures/chelsea.png \
+            --image crates/fileforge-core/tests/fixtures/rocket.jpg
+      - name: Create the draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir assets
+          cp model/encoder.onnx assets/sam2.1-hiera-tiny-encoder.onnx
+          cp model/decoder.onnx assets/sam2.1-hiera-tiny-decoder.onnx
+          cp model/manifest.json assets/manifest.json
+          cp sam2/LICENSE assets/LICENSE-SAM2.txt
+          (cd assets && sha256sum -- * > SHA256SUMS)
+          cat assets/SHA256SUMS
+          gh release create "$TAG" assets/* --draft --prerelease --target "$GITHUB_SHA" \
+            --title "Background removal model: SAM 2.1 hiera-tiny" \
+            --notes "SAM 2.1 hiera-tiny image encoder and mask decoder (Meta, Apache-2.0, see LICENSE-SAM2.txt), exported by tools/model-export at ${GITHUB_SHA} from sam2 ${SAM2_COMMIT}. Checkpoint SHA-256 and parity results are in manifest.json. Publish as a prerelease only, never as the latest release (ADR-0022)."
