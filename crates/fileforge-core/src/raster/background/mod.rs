@@ -126,7 +126,8 @@ pub fn decode(input: &[u8]) -> Result<DecodedImage, RasterError> {
                 }
                 let icc = info.icc_profile.as_ref().map(|p| p.to_vec());
                 let orientation = super::png::background_orientation(input)?;
-                let mut buf = vec![0; reader.output_buffer_size()];
+                let len = reader.output_buffer_size().ok_or(RasterError::TooManyPixels { limit: MAX_PIXELS })?;
+                let mut buf = vec![0; len];
                 let frame = reader.next_frame(&mut buf).map_err(malformed)?;
                 let rgba = buf[..frame.buffer_size()]
                     .chunks_exact(frame.color_type.samples())

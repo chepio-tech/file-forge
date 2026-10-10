@@ -18,7 +18,7 @@ use crate::control::{Control, Progress, Stage};
 
 const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
-/// png 0.17 does not populate eXIf; read its bounded borrowed payload without allocating a chunk list.
+/// Read bounded borrowed eXIf metadata, including chunks after pixel data, without allocating a chunk list.
 pub(super) fn background_orientation(input: &[u8]) -> Result<u16, RasterError> {
     let mut pos = SIGNATURE.len();
     let mut orientation = 1;
@@ -205,7 +205,7 @@ fn decode_rows(input: &[u8], limits: &Limits) -> Result<DecodedRows, RasterError
     let mut decoder = Decoder::new_with_limits(Cursor::new(input), png::Limits { bytes: limits.max_png_bytes });
     decoder.set_transformations(Transformations::IDENTITY);
     let mut reader = decoder.read_info().map_err(|error| decoding_error(error, limits))?;
-    let length = reader.output_buffer_size();
+    let length = reader.output_buffer_size().ok_or(RasterError::TooManyPixels { limit: limits.max_pixels })?;
     if length > limits.max_png_bytes {
         return Err(RasterError::TooManyPixels { limit: limits.max_pixels });
     }
@@ -269,7 +269,7 @@ fn pixel_hash(input: &[u8], limits: &Limits) -> Result<u64, RasterError> {
     let mut decoder = Decoder::new_with_limits(Cursor::new(input), png::Limits { bytes: limits.max_png_bytes });
     decoder.set_transformations(Transformations::EXPAND);
     let mut reader = decoder.read_info().map_err(|error| decoding_error(error, limits))?;
-    let length = reader.output_buffer_size();
+    let length = reader.output_buffer_size().ok_or(RasterError::TooManyPixels { limit: limits.max_pixels })?;
     if length > limits.max_png_bytes {
         return Err(RasterError::TooManyPixels { limit: limits.max_pixels });
     }
