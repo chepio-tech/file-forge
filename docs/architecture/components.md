@@ -14,7 +14,7 @@ flowchart LR
 |---|---|---|
 | Web UI `src/` | Layout, state of tool panels, UI strings, presentation of results | Import `@tauri-apps/*` outside `src/services/fileforgeApi.ts`; handle paths |
 | Desktop shell `src-tauri/` | IPC commands, `FileRegistry` (session ids → paths), `ResultStore` (temp results, one compression at a time), `Cancellation` and progress throttling (`job_control`), app updates (`updates`), native dialogs, drop events | Contain processing logic |
-| Core `crates/fileforge-core/` | `FileKind` detection, shared `control` (cancellation, progress), PDF engine (`pdf/`: guards, metadata, dedupe, fonts, cff, placement, images, jpx, photos, streams), image engine (`raster/`: `jpeg/` segments, scans, huffman; `png`, `webp`, `exif`) | Depend on `tauri` or any UI crate; touch global state; call `libwebp-sys` |
+| Core `crates/fileforge-core/` | `FileKind` detection, shared `control` (cancellation, progress), PDF engine (`pdf/`: guards, metadata, dedupe, fonts, cff, placement, images, jpx, photos, streams), image engine (`raster/`: `jpeg/` segments, scans, huffman; `png`, `webp`, `exif`, shared `pixels`, `convert/`) | Depend on `tauri` or any UI crate; touch global state; call `libwebp-sys` |
 | SAM adapter `crates/fileforge-segment/` | Hash verification, normalized image tensors, pinned ONNX graphs, owned thread pool, embeddings and mask selection | Depend on Tauri; read user files; make network requests |
 | WebP encoder `crates/fileforge-webp/` | One safe function: validated RGB/RGBA pixels → WebP bytes through libwebp, stoppable; the workspace's only `unsafe` code (ADR-0020) | Decode or parse files; depend on other workspace crates |
 
@@ -31,3 +31,6 @@ UI structure: `components/` shared presentational pieces, plus `UpdateStatus` (s
 `features/` one folder per tool (settings, presets, the engine adapter for `useCompressionJobs`) plus
 `featureCatalog.ts`; `hooks/` shared stateful logic (`useFileIntake`, `useDragHover`, `useCompressionJobs`);
 `messages/` all UI strings; `services/` the IPC client.
+
+Image conversion and background removal both depend on `raster::pixels`; neither editing engine depends on the other.
+Conversion reuses the batch job runner and shared list with conversion labels and no savings claims.

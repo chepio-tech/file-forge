@@ -49,6 +49,7 @@ pub fn run() {
             commands::remove_file,
             commands::compress_pdf,
             commands::compress_image,
+            commands::convert_image,
             commands::cancel_compression,
             commands::save_result,
             commands::save_results_to_folder,

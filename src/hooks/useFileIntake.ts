@@ -4,7 +4,7 @@ import { useCallback, useEffect, useEffectEvent, useState } from "react";
 import fileforgeApi from "@/services/fileforgeApi";
 // Types
 import type { ToolDefinition } from "@/features/featureCatalog";
-import type { FileId, FileInfo, RegisterOutcome } from "@/services/fileforgeApi";
+import type { FileId, FileInfo, FileScope, RegisterOutcome } from "@/services/fileforgeApi";
 // Utils
 import { errorMessage, listNames } from "@/utils/errorMessage";
 // Consts
@@ -26,6 +26,7 @@ export interface FileIntake {
  * de-duplicated by id.
  */
 export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake {
+  const scope: FileScope | undefined = tool.id === "imageBackground" ? "background" : tool.id === "imageConvert" ? "conversion" : undefined;
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [notice, setNotice] = useState<string[]>([]);
 
@@ -64,10 +65,10 @@ export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake
   useEffect(() => {
     // Without it dropped folders add nothing; directly dropped files still arrive, so a failure stays quiet.
     if (active) {
-      const task = tool.id === "imageBackground" ? fileforgeApi.setDropKinds(tool.accepts, "background") : fileforgeApi.setDropKinds(tool.accepts);
+      const task = scope ? fileforgeApi.setDropKinds(tool.accepts, scope) : fileforgeApi.setDropKinds(tool.accepts);
       task.catch(() => {});
     }
-  }, [active, tool]);
+  }, [active, tool, scope]);
 
   useEffect(() => {
     if (!active) return;
@@ -85,11 +86,11 @@ export function useFileIntake(tool: ToolDefinition, active: boolean): FileIntake
 
   const pick = useCallback(async () => {
     try {
-      accept(await (tool.id === "imageBackground" ? fileforgeApi.pickFiles(tool.accepts, messages.intake.filterName(tool.formats), "background") : fileforgeApi.pickFiles(tool.accepts, messages.intake.filterName(tool.formats))));
+      accept(await (scope ? fileforgeApi.pickFiles(tool.accepts, messages.intake.filterName(tool.formats), scope) : fileforgeApi.pickFiles(tool.accepts, messages.intake.filterName(tool.formats))));
     } catch (error) {
       setNotice([errorMessage(error)]);
     }
-  }, [accept, tool]);
+  }, [accept, tool, scope]);
 
   const remove = useCallback((id: FileId) => {
     setFiles((current) => current.filter((file) => file.id !== id));

@@ -35,3 +35,14 @@ Rules the code must keep. Each has a test; change the test and this file togethe
 - Missing subjects, malformed masks, non-finite points and cancellation never publish a new result.
 
 Validation: `raster::background` tests, `file_registry` scope test and `results` cutout naming test.
+
+## Image conversion (ADR-0023)
+- Conversion ids and results are isolated from compression and background removal, even for the same source.
+- PNG/WebP output keeps every decoded 8-bit RGBA sample, including colors under full transparency. JPEG uses
+  explicit quality, 4:4:4 chroma and a selected solid background; dimensions stay unchanged after orientation.
+- Orientation is applied once; RGB ICC bytes are preserved; other metadata is removed with an explicit UI notice.
+- Animated, signed, extended, 16-bit or unsupported-color inputs are refused, never silently simplified.
+- Conversion always produces the requested format, even when larger. Originals and existing batch saves stay safe.
+- Cancellation never publishes a new result. All processing uses the shared work slot.
+
+Validation: `tests/raster_convert.rs`, shell `commands` conversion tests, registry scope tests, ImageConvert tests.

@@ -39,6 +39,10 @@ pub enum AppError {
     ImageUnsupported(String),
     #[error("not a readable image: {0}")]
     ImageMalformed(String),
+    #[error("image exceeds conversion limits")]
+    ConversionTooLarge,
+    #[error("unsupported conversion input: {0}")]
+    ConversionUnsupported(String),
     #[error("invalid options: {0}")]
     InvalidOptions(String),
     /// The user cancelled the compression; nothing was stored.

@@ -31,8 +31,8 @@ Builds are not signed yet:
 
 <img src="docs/assets/app-icon.png" alt="FileForge app icon" width="112" height="112" />
 
-Desktop PDF and image compression and image background removal, entirely on your computer. Built for macOS, Windows and Linux.
-Format conversion, video and audio tools are planned; they are shown as **Soon** in the app.
+Desktop PDF and image compression, image conversion and background removal, entirely on your computer. Built for macOS, Windows and Linux.
+PDF conversion, AVIF/HEIC, video and audio tools are planned; they are shown as **Soon** in the app.
 
 ## What works
 
@@ -51,6 +51,9 @@ Format conversion, video and audio tools are planned; they are shown as **Soon**
   re-encode JPEGs and lossy WebPs only when that saves at least 2%; PNGs and lossless WebPs always stay lossless.
   Metadata stays unless you remove it; color profiles and photo orientation always stay. Signed (Content
   Credentials), animated and HDR gain-map files are returned unchanged.
+- Convert between JPEG, PNG and WebP. PNG/WebP output keeps decoded pixels and transparency; JPEG has explicit
+  quality and a white/black background for transparency. Orientation and RGB color profiles are kept; other
+  metadata is removed. Results use separate `-converted` names and may be larger than the source.
 - Remove image backgrounds with SAM 2.1 hiera-tiny (Apache-2.0), downloaded once after your click (about 83 MB).
   Work offline after that: automatic subject, click or keyboard coordinates to pick another, transparent PNG/WebP
   or a solid color, optional crop, previews and batch saving. Up to 32 MP/256 MB; 16-bit PNG becomes 8-bit.
@@ -94,6 +97,7 @@ see [deployment](docs/architecture/deployment.md).
 
 ## Current limits
 
+- Conversion accepts still 8-bit images up to 32 megapixels and 256 MiB. Signed, animated, extended and unsupported-color files are refused. AVIF and HEIC conversion are not available yet.
 - PDF inputs are limited to 1 GiB, images to 256 MiB and 120 megapixels; compression runs one file at a time.
 - Lossless leaves progressive JPEGs and lossy WebPs as they are unless metadata is removed. HEIC, AVIF, GIF and
   other image formats are not compressed yet.

@@ -12,7 +12,7 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/background.rs`, `sr
   (`errors.*` in `src/messages/messages.ts`); `detail` is for diagnostics only and never shown verbatim.
 
 ## Commands and events today
-- `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`. Optional `scope: "background"`
+- `pick_files` — native open dialog filtered to file kinds → `RegisterOutcome`. Optional `scope: "background" | "conversion"`
   gives this tool independent ids; omitted scope is compression. Re-adding the same file de-duplicates within its scope.
 - `set_drop_kinds(kinds, scope?)` — the shown tool's file kinds; dropped folders contribute only files with their
   extensions (ADR-0017). The optional scope also applies to directly dropped files. Until set, folders contribute nothing.
@@ -38,6 +38,11 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/background.rs`, `sr
   metadataRemoved }`; `kept` is `null` for a new result, otherwise why the original stays: `notSmaller`, `extraData`,
   `signed`, `animated`, `unsupportedEncoding` or `lossyEncoding` (a lossy WebP and no WebP quality). Progress stages:
   `loading`, `encoding`, `verifying`. The format comes from the file's content, and the result keeps it.
+- `convert_image(id, options, onProgress)` → `{ format, width, height, originalSize, outputSize, flattened }`
+  (ADR-0023). Options: `{ format: "jpeg" | "png" | "webp", jpegQuality: 30–95, background: [r,g,b] }`.
+  Only conversion-scope ids are accepted. Unknown option fields are rejected. PNG/WebP are lossless; JPEG
+  composites alpha over the RGB background and uses 4:4:4 chroma. Progress: `loading`, `encoding`, `verifying`.
+  Results may be larger. Orientation is applied, RGB ICC preserved, other metadata removed.
 - `background_model_status` → `{ installed, downloadBytes }`; verifies the two pinned model files.
 - `download_background_model(onProgress)` — explicit download into app-local data; progress channel sends
   `{ downloaded, total }`. Sizes and SHA-256 must match before atomic publication; failed partials are removed.
@@ -54,7 +59,7 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/background.rs`, `sr
 - `save_result(id)` — native save dialog next to the original, filtered to the result's format → saved file name,
   or `null` if cancelled.
   Choosing any session input (including aliases, macOS case variants and files removed from the list) returns `originalTarget`.
-- `save_results_to_folder(ids)` — folder picker, `<name>-compressed.<ext>` (compression) or `<name>-cutout.<ext>` (background removal) without overwriting → `SavedFile[]` or
+- `save_results_to_folder(ids)` — folder picker, `<name>-compressed.<ext>` (compression) , `<name>-cutout.<ext>` (background removal) or `<name>-converted.<ext>` (conversion) without overwriting → `SavedFile[]` or
   `null`. `<ext>` is `pdf`, `png`, `webp`, or `jpg` (`jpeg` when the original used it).
 - `reveal_result(id)` — show the last saved copy in the file manager.
 - `check_for_update` → `{ currentVersion, availableVersion | null }`; remembers the found update in Rust (ADR-0013).
@@ -69,6 +74,7 @@ Source of truth: `src-tauri/src/commands.rs`, `src-tauri/src/background.rs`, `sr
 Error codes: `unknownFile`, `noResult`, `originalTarget`, `notAFile`, `pdfTooLarge`, `pdfEncrypted`, `pdfSigned`, `pdfMalformed`,
 `imageTooLarge` (bytes or pixels, named in `detail`), `imageUnsupported` (not JPEG, PNG or WebP by content; `detail` names the
 format when known), `imageMalformed`,
+`conversionTooLarge` (32 MP/256 MB), `conversionUnsupported` (precision, animation, signatures, extra images, color space or target dimension limits),
 `backgroundTooLarge` (32 MP/256 MB), `backgroundUnsupported` (animation or unsupported JPEG coding),
 `modelMissing`, `modelDownload` (download or integrity failure), `noSubject` (click the original to retry),
 `invalidOptions`, `cancelled`, `busy`, `unsavedResults`, `update`, `io`, `internal`.

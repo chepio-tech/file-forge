@@ -40,6 +40,23 @@ export interface RegisterOutcome {
   folders?: FolderScan;
 }
 
+export type FileScope = "background" | "conversion";
+
+export interface ConversionOptions {
+  format: RasterFormat;
+  jpegQuality: number;
+  background: [number, number, number];
+}
+
+export interface ConversionReport {
+  format: RasterFormat;
+  width: number;
+  height: number;
+  originalSize: number;
+  outputSize: number;
+  flattened: boolean;
+}
+
 export interface BackgroundOptions {
   format: "png" | "webp";
   background: [number, number, number] | null;
@@ -167,6 +184,8 @@ export type AppErrorCode =
   | "imageTooLarge"
   | "imageUnsupported"
   | "imageMalformed"
+  | "conversionTooLarge"
+  | "conversionUnsupported"
   | "invalidOptions"
   | "cancelled"
   | "busy"
@@ -193,11 +212,11 @@ export function isAppError(value: unknown): value is AppError {
 
 const fileforgeApi = {
   /** Opens the native file dialog filtered to `kinds`; resolves with an empty outcome when the user cancels. */
-  pickFiles: (kinds: FileKind[], filterName: string, scope?: "background") =>
+  pickFiles: (kinds: FileKind[], filterName: string, scope?: FileScope) =>
     invoke<RegisterOutcome>("pick_files", { kinds, filterName, scope }),
 
   /** Kinds that dropped folders contribute; the shown tool sets them. Directly dropped files are not filtered. */
-  setDropKinds: (kinds: FileKind[], scope?: "background") => invoke<void>("set_drop_kinds", { kinds, scope }),
+  setDropKinds: (kinds: FileKind[], scope?: FileScope) => invoke<void>("set_drop_kinds", { kinds, scope }),
 
   /** Forgets the file and its unsaved result. */
   removeFile: (id: FileId) => invoke<void>("remove_file", { id }),
@@ -215,6 +234,11 @@ const fileforgeApi = {
   compressImage: (id: FileId, options: RasterOptions, onProgress: (progress: Progress) => void = () => {}) => {
     const channel = new Channel<Progress>(onProgress);
     return invoke<RasterReport>("compress_image", { id, options, onProgress: channel });
+  },
+
+  convertImage: (id: FileId, options: ConversionOptions, onProgress: (progress: Progress) => void = () => {}) => {
+    const channel = new Channel<Progress>(onProgress);
+    return invoke<ConversionReport>("convert_image", { id, options, onProgress: channel });
   },
 
   backgroundPreview: async (id: FileId) => imageData(await invoke<number[]>("background_preview", { id })),

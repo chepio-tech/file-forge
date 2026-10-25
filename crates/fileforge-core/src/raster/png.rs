@@ -18,6 +18,30 @@ use crate::control::{Control, Progress, Stage};
 
 const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
+pub(super) fn validate_conversion(input: &[u8]) -> Result<(), RasterError> {
+    let chunks = Chunks::parse(input)?;
+    if !chunks.trailing.is_empty() || [b"acTL", b"caBX", b"dSIG"].iter().any(|name| chunks.has(name)) {
+        return Err(RasterError::Unsupported("animated, signed or extended PNG".into()));
+    }
+    if chunks.list.iter().any(|(name, data)| name == b"IHDR" && data.get(8) == Some(&16)) {
+        return Err(RasterError::Unsupported("16-bit PNG".into()));
+    }
+    if [b"cICP", b"mDCV", b"cLLI"].iter().any(|name| chunks.has(name)) {
+        return Err(RasterError::Unsupported("PNG color/HDR signalling".into()));
+    }
+    // The shared pixel representation carries ICC, but cannot translate a custom transfer curve or HDR metadata.
+    if !chunks.has(b"iCCP")
+        && !chunks.has(b"sRGB")
+        && chunks
+            .list
+            .iter()
+            .any(|(name, data)| (name == b"gAMA" && *data != 45455u32.to_be_bytes()) || name == b"cHRM")
+    {
+        return Err(RasterError::Unsupported("PNG color space without an ICC profile".into()));
+    }
+    Ok(())
+}
+
 /// Read bounded borrowed eXIf metadata, including chunks after pixel data, without allocating a chunk list.
 pub(super) fn background_orientation(input: &[u8]) -> Result<u16, RasterError> {
     let mut pos = SIGNATURE.len();

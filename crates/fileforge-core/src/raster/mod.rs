@@ -8,11 +8,13 @@
 //! Every stage reports progress and checks for cancellation through a [`Control`].
 
 pub mod background;
+pub mod convert;
 mod error;
 mod exif;
 mod jpeg;
 mod limits;
 mod options;
+mod pixels;
 mod png;
 mod webp;
 

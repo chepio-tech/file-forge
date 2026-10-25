@@ -47,6 +47,15 @@ const FLAG_EXIF: u8 = 0x08;
 const FLAG_XMP: u8 = 0x04;
 const FLAG_ANIMATION: u8 = 0x02;
 
+pub(super) fn validate_conversion(input: &[u8]) -> Result<(), RasterError> {
+    let riff = Riff::parse(input)?;
+    if !riff.trailing.is_empty() || riff.has(C2PA) {
+        return Err(RasterError::Unsupported("signed or extended WebP".into()));
+    }
+    background_dimensions(input)?;
+    Ok(())
+}
+
 /// Validate the container before editing: the decoder must not silently discard source alpha.
 pub(super) fn background_dimensions(input: &[u8]) -> Result<(u32, u32), RasterError> {
     let riff = Riff::parse(input)?;
