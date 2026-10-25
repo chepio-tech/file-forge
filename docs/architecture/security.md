@@ -92,3 +92,16 @@ Only conversion-scope registry ids reach `convert_image`. Input is read with the
 safe Rust codecs; libwebp still receives decoded pixels only. Signed/animated/extended containers are refused
 before conversion. Target bytes are decoded again before publication. No new filesystem permissions, network
 endpoints or dependencies are introduced. Errors expose typed codes, not parser details or paths.
+
+## Dependency review (2026-10-25)
+The v0.4.0 lockfiles include the October rustls, certificate-verification and Tokio fixes, plus the undici fixes
+used by the JavaScript test environment. Package versions remain in the lockfiles; licenses are unchanged and
+allowed by ADR-0021. No dependency families or application permissions were added.
+
+RustSec still reports RUSTSEC-2026-0367/0368/0369 for the Windows updater's `zip` dependency. User files cannot
+reach that extractor: `updates.rs` downloads and verifies the update signature and signed version before calling
+the installer. Current Windows release assets are raw EXE/MSI. This limits exposure but does not remove the
+upstream advisory; revisit when the updater supports a patched ZIP version or its package formats change.
+The existing glib RUSTSEC-2024-0429 warning and maintenance warnings for proc-macro-error, zbus_names, zvariant
+and zvariant_derive remain. The reviewed sources contain no use of glib's affected string iterator, but this is
+not a complete Linux reachability proof. No audit exclusions were added.
