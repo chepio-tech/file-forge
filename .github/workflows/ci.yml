@@ -44,6 +44,25 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
 
+  result-sessions:
+    name: result-sessions (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: 1.92.0
+      - name: Test result ownership and crash cleanup on the minimum Rust version
+        shell: bash
+        run: |
+          rustc --edition=2024 --forbid unsafe_code --deny warnings --test src-tauri/src/results/session.rs -o "$RUNNER_TEMP/fileforge-session-tests.exe"
+          "$RUNNER_TEMP/fileforge-session-tests.exe"
+
   installer-dpi:
     runs-on: windows-latest
     steps:

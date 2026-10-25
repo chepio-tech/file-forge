@@ -103,14 +103,21 @@ WebP: input + decoded pixels + libwebp's working copy (ARGB, about the same agai
 | Batch output name becomes taken | Retry with the next numbered name; no existing file is replaced |
 | Destination does not support hard links | Batch save returns `io`; use individual saves or a supported filesystem |
 | File manager cannot reveal a saved result | UI notice; the saved result remains available |
-| App quits | Temp results are deleted (`RunEvent::Exit`); also cleared at the next start |
+| App quits | Only its own temp session is closed/deleted (`RunEvent::Exit`); late publication is refused |
+| Another app copy starts/exits | Independent session; existing live results remain usable (ADR-0024) |
+| Process terminates abnormally | Its OS lease releases; a later startup may reclaim its abandoned session |
+| Session coordination stays busy for 5 s | New session creation fails; ownership checks are never bypassed |
+| Startup cleanup encounters an inaccessible/linked/locked entry | Preserve it and continue best-effort bounded collection |
 | Offline or GitHub unreachable at startup | Update check times out after 15 s and the UI stays quiet; a manual check says so |
 | Update download stalls | `update` after 10 min; nothing installed, results kept |
 | Update signature or signed version invalid | `update`; nothing installed (ADR-0013) |
 | Restart to update while work runs | `busy`; the update stays available |
 | Restart to update with unsaved results | `unsavedResults`; the UI asks before installing with `discardUnsaved` |
 
-No network, no retries, no timeouts needed: everything is local and user-initiated.
+File processing is local and user-initiated. Session coordination retries lock contention within its five-second
+deadline; no processing retries are added. Startup collection examines at most 4,096 cache entries. Setup and
+normal exit wait for blocking workers to complete filesystem work. Session ownership and legacy-cache behavior
+are specified in ADR-0024; update/model network deadlines are described separately.
 
 ## Measured (Apple M-series, release build, 2026-10-03)
 | File | Lossless | Balanced | Maximum | Screen |
@@ -219,3 +226,10 @@ PNG/WebP output uses the existing lossless encoders; JPEG uses jpeg-encoder with
 tables. No new dependency or threads are introduced. Cancellation is checked between stages and inside libwebp;
 PNG/JPEG encoding and source decoding finish their current call before observing cancellation. A completed
 conversion can be larger, and the UI reports sizes without a reduction percentage. Saves use `-converted` names.
+
+## Result sessions (ADR-0024)
+Measured on macOS 26.6.2 ARM64, release build, 2026-10-25: two independently launched app bundles created separate
+sessions. A synthetic file in the first session survived the second launch and normal exit, and the first
+directory remained writable. Normal exit then removed the first session and lease. This checks the native
+setup/exit hooks; command-level tests separately cover actual result publication and saved copies. Subprocess
+tests force termination during ownership and initialization to exercise subsequent startup collection.
