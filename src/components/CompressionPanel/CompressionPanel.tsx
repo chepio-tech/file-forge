@@ -35,6 +35,8 @@ interface CompressionPanelProps<Options, Report> {
   /** The tool's settings section, shown above the file list. */
   settings: ReactNode;
   describe: (job: DoneJob<Report>) => JobOutcome;
+  /** Editing tools show actual sizes without claiming savings. */
+  conversion?: boolean;
 }
 
 /** Layout shared by the compression tools: intake, settings, per-file results and the action bar. */
@@ -49,8 +51,10 @@ function CompressionPanel<Options, Report>({
   hovering,
   settings,
   describe,
+  conversion = false,
 }: CompressionPanelProps<Options, Report>) {
   const text = messages.compression;
+  const action = conversion ? messages.conversion : { convert: text.compress, converting: text.compressing, outdated: text.outdated, working: text.working };
   const { files } = intake;
   const done = [...jobs.jobs.values()].flatMap((job) => (job.status === "done" ? [job] : []));
   const savable = done.filter((job) => !engine.keptOriginal(job.report)).length;
@@ -113,6 +117,8 @@ function CompressionPanel<Options, Report>({
                     describe={describe}
                     onSave={(id) => void jobs.save(id)}
                     onReveal={jobs.reveal}
+                    showReduction={!conversion}
+                    workingLabel={action.working}
                   />
                 )}
               />
@@ -125,13 +131,13 @@ function CompressionPanel<Options, Report>({
         <footer className="compression-panel__actions">
           <div className="compression-panel__outcome" aria-live="polite">
             {outdated && !jobs.running ? (
-              <span className="compression-panel__outdated">{text.outdated}</span>
+              <span className="compression-panel__outdated">{action.outdated}</span>
             ) : done.length > 0 ? (
               <>
                 <span className="compression-panel__outcome-sizes">
                   {text.total(formatBytes(totalBefore), formatBytes(totalAfter))}
                 </span>
-                <span className="job-status__reduction">{text.reduction(formatReduction(totalBefore, totalAfter))}</span>
+                {!conversion ? <span className="job-status__reduction">{text.reduction(formatReduction(totalBefore, totalAfter))}</span> : null}
               </>
             ) : null}
           </div>
@@ -151,7 +157,7 @@ function CompressionPanel<Options, Report>({
             disabled={jobs.busy}
             onClick={() => void jobs.compressAll(options)}
           >
-            {jobs.progress ? text.compressing(jobs.progress.current, jobs.progress.total) : text.compress(files.length)}
+            {jobs.progress ? action.converting(jobs.progress.current, jobs.progress.total) : action.convert(files.length)}
           </button>
         </footer>
       ) : null}

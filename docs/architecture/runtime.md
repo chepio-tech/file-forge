@@ -210,3 +210,12 @@ performance benchmark. The model download is 82,537,778 bytes; graph files are n
 Real-model plus refinement peak RSS measured on the two small fixtures: 1,932,902,400 bytes (about 1.8 GiB).
 Larger images add source/output buffers; the 32 MP limit is conservative and is not a measured worst-case guarantee.
 Refinement coefficients use at most a 1024-pixel grid; cancellation is checked on every statistics/render row.
+
+## Image conversion (ADR-0023)
+At most 256 MiB of input and 32 million pixels, sharing background removal's bounded RGBA codec. PNG decoding
+has a 256 MiB budget; WebP decoding has a 128 MB pixel budget. JPEG target dimensions must fit 65,535 per axis;
+WebP targets at most 16,383 per axis. One work slot covers read, decode, encode, verification and publication.
+PNG/WebP output uses the existing lossless encoders; JPEG uses jpeg-encoder with 4:4:4 chroma and optimized Huffman
+tables. No new dependency or threads are introduced. Cancellation is checked between stages and inside libwebp;
+PNG/JPEG encoding and source decoding finish their current call before observing cancellation. A completed
+conversion can be larger, and the UI reports sizes without a reduction percentage. Saves use `-converted` names.

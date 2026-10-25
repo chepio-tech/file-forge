@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use fileforge_core::FileKind;
 use fileforge_core::pdf::{self, PdfOptions, PdfReport, Progress};
+use fileforge_core::raster::convert;
 use fileforge_core::raster::{self, RasterFormat, RasterOptions, RasterReport};
 use serde::Serialize;
 use tauri::ipc::Channel;
@@ -17,7 +18,7 @@ use tauri_plugin_opener::OpenerExt;
 // Types
 use crate::drag_drop::DropKinds;
 use crate::error::AppError;
-use crate::file_registry::{FileId, FileRegistry, FileScope, RegisterOutcome};
+use crate::file_registry::{FileId, FileRegistry, FileScope, RegisterOutcome, RegisteredFile};
 use crate::job_control::{Cancellation, JobControl};
 use crate::results::{ResultStore, copy_result, copy_result_to_folder, output_name_with_suffix};
 use crate::updates::{self, UpdateStatus};
@@ -141,6 +142,61 @@ fn image_extension(name: &str, format: RasterFormat) -> &'static str {
         RasterFormat::Jpeg => "jpg",
         RasterFormat::Png => "png",
         RasterFormat::Webp => "webp",
+    }
+}
+
+/// Converts one file into a separate temp result. Conversion never replaces compression or cutout results.
+#[tauri::command]
+pub async fn convert_image(
+    app: AppHandle,
+    id: FileId,
+    options: convert::Options,
+    on_progress: Channel<Progress>,
+) -> Result<convert::Report, AppError> {
+    options.validate()?;
+    let ticket = app.state::<Cancellation>().ticket();
+    tauri::async_runtime::spawn_blocking(move || {
+        let results = app.state::<ResultStore>();
+        let _slot = results.work_slot();
+        let cancellation = app.state::<Cancellation>();
+        if cancellation.is_cancelled(ticket) {
+            return Err(AppError::Cancelled);
+        }
+        let file = app.state::<FileRegistry>().get(id)?;
+        let control = JobControl::new(&cancellation, ticket, |progress| drop(on_progress.send(progress)));
+        convert_registered(&file, &results, &options, &control)
+    })
+    .await?
+}
+
+fn convert_registered(
+    file: &RegisteredFile,
+    results: &ResultStore,
+    options: &convert::Options,
+    control: &dyn raster::Control,
+) -> Result<convert::Report, AppError> {
+    if file.scope != FileScope::Conversion {
+        return Err(AppError::InvalidOptions("file belongs to another tool".into()));
+    }
+    if control.is_cancelled() {
+        return Err(AppError::Cancelled);
+    }
+    let input = read_input(&file.path, convert::MAX_INPUT_BYTES, |_| AppError::ConversionTooLarge)?;
+    let output = convert::convert(&input, options, control).map_err(conversion_error)?;
+    if control.is_cancelled() {
+        return Err(AppError::Cancelled);
+    }
+    results.put_named(file.info.id, &output.bytes, output.report.format.extension(), "converted")?;
+    Ok(output.report)
+}
+
+fn conversion_error(error: raster::RasterError) -> AppError {
+    match error {
+        raster::RasterError::TooLarge { .. } | raster::RasterError::TooManyPixels { .. } => {
+            AppError::ConversionTooLarge
+        }
+        raster::RasterError::Unsupported(detail) => AppError::ConversionUnsupported(detail),
+        error => error.into(),
     }
 }
 
@@ -284,6 +340,65 @@ fn read_limited(reader: impl Read, limit: u64, too_large: impl Fn(u64) -> AppErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn conversion_uses_its_own_result_and_saves_without_overwriting_inputs_or_existing_files() {
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("source.png");
+        let source = fileforge_core::raster::background::png_bytes(
+            &image::RgbaImage::from_pixel(8, 8, image::Rgba([12, 34, 56, 128])),
+            None,
+        )
+        .expect("fixture");
+        std::fs::write(&path, &source).expect("source");
+        let registry = FileRegistry::default();
+        let compression = registry.register_scoped(path.clone(), FileScope::Compression).expect("compression");
+        let conversion = registry.register_scoped(path.clone(), FileScope::Conversion).expect("conversion");
+        let store = ResultStore::open(dir.path().join("results")).expect("store");
+        store.put(compression.id, b"compression result", "png").expect("existing");
+        assert!(matches!(
+            convert_registered(&registry.get(compression.id).expect("file"), &store, &convert::Options::default(), &()),
+            Err(AppError::InvalidOptions(_))
+        ));
+        let options = convert::Options { format: convert::OutputFormat::Webp, ..convert::Options::default() };
+        let report =
+            convert_registered(&registry.get(conversion.id).expect("file"), &store, &options, &()).expect("convert");
+        assert_eq!(report.format, convert::OutputFormat::Webp);
+        let result = store.get(conversion.id).expect("result");
+        let name = output_name_with_suffix(&conversion.name, result.extension, result.suffix);
+        assert_eq!(name, "source-converted.webp");
+        let saved = copy_result_to_folder(&result, dir.path(), &name).expect("save");
+        let again = copy_result_to_folder(&result, dir.path(), &name).expect("second save");
+        assert_ne!(saved, again);
+        assert_eq!(std::fs::read(saved).expect("saved"), std::fs::read(&result.temp_path).expect("result"));
+        assert_eq!(std::fs::read(&path).expect("original"), source);
+        assert_eq!(
+            std::fs::read(store.get(compression.id).expect("compression").temp_path).expect("bytes"),
+            b"compression result"
+        );
+        assert!(matches!(registry.check_save_target(&path), Err(AppError::OriginalTarget)));
+    }
+
+    #[test]
+    fn cancelled_conversion_does_not_publish_a_result() {
+        struct Stop;
+        impl raster::Control for Stop {
+            fn is_cancelled(&self) -> bool {
+                true
+            }
+        }
+        let dir = tempfile::tempdir().expect("dir");
+        let path = dir.path().join("source.png");
+        std::fs::write(&path, b"input").expect("fixture");
+        let registry = FileRegistry::default();
+        let info = registry.register_scoped(path, FileScope::Conversion).expect("register");
+        let store = ResultStore::open(dir.path().join("results")).expect("store");
+        assert!(matches!(
+            convert_registered(&registry.get(info.id).expect("file"), &store, &convert::Options::default(), &Stop),
+            Err(AppError::Cancelled)
+        ));
+        assert!(store.get(info.id).is_none());
+    }
 
     #[test]
     fn input_reads_accept_the_limit_and_reject_larger_files() {

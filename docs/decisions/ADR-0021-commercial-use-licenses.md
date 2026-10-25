@@ -43,7 +43,7 @@ installed copies.
   installed copies that download it.
 - **Ask the DIS authors for written permission:** possible, but the answer may never come and would cover only
   that model.
-- **Judge each case on its own:** flexible, but every agent and contributor would weigh the risk differently.
+- **Judge each case on its own:** flexible, but each contributor would weigh the risk differently.
 
 ## Consequences
 - ISNet, BiRefNet and models derived from them are excluded. Background removal needs a model that passes this

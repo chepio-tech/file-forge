@@ -27,6 +27,7 @@ pub enum FileScope {
     #[default]
     Compression,
     Background,
+    Conversion,
 }
 
 /// What the UI knows about a registered file.
@@ -245,9 +246,14 @@ mod tests {
         let registry = FileRegistry::default();
         let compression = registry.register_scoped(path.clone(), FileScope::Compression).expect("compression");
         let background = registry.register_scoped(path.clone(), FileScope::Background).expect("background");
+        let conversion = registry.register_scoped(path.clone(), FileScope::Conversion).expect("conversion");
+        assert_ne!(conversion.id, compression.id);
+        assert_ne!(conversion.id, background.id);
+        assert_eq!(conversion.id, registry.register_scoped(path.clone(), FileScope::Conversion).expect("dedup").id);
         assert_ne!(compression.id, background.id);
         assert_eq!(background.id, registry.register_scoped(path.clone(), FileScope::Background).expect("dedup").id);
         registry.remove(background.id);
+        assert!(registry.get(conversion.id).is_ok());
         assert!(registry.get(compression.id).is_ok());
         assert!(matches!(registry.check_save_target(&path), Err(AppError::OriginalTarget)));
     }

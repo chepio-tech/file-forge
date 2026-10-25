@@ -86,3 +86,9 @@ Untrusted images use only safe Rust decoders. Background removal refuses animati
 above 32 MP/256 MB. PNG decoding has a 256 MB allocation budget; 16-bit PNG samples are reduced to 8 bits. The
 inference adapter only sees decoded pixels and verified graph files. One work slot serializes inference, model
 management and result saving. Embeddings are keyed by input content, capped at one, and cleared with the model.
+
+## Image conversion (ADR-0023)
+Only conversion-scope registry ids reach `convert_image`. Input is read with the same bounded shell reader and
+safe Rust codecs; libwebp still receives decoded pixels only. Signed/animated/extended containers are refused
+before conversion. Target bytes are decoded again before publication. No new filesystem permissions, network
+endpoints or dependencies are introduced. Errors expose typed codes, not parser details or paths.

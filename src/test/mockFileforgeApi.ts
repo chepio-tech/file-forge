@@ -2,6 +2,9 @@
 import { vi } from "vitest";
 // Types
 import type {
+  ConversionOptions,
+  ConversionReport,
+  FileScope,
   BackgroundOptions,
   BackgroundReport,
   ModelStatus,
@@ -26,11 +29,11 @@ export function createApiMock() {
   let hover: ((hovering: boolean) => void) | null = null;
 
   const api = {
-    pickFiles: vi.fn<(kinds: string[], filterName: string, scope?: "background") => Promise<RegisterOutcome>>(async () => ({
+    pickFiles: vi.fn<(kinds: string[], filterName: string, scope?: FileScope) => Promise<RegisterOutcome>>(async () => ({
       files: [],
       skipped: [],
     })),
-    setDropKinds: vi.fn(async (_kinds: string[], _scope?: "background") => {}),
+    setDropKinds: vi.fn(async (_kinds: string[], _scope?: FileScope) => {}),
     removeFile: vi.fn(async (_id: number) => {}),
     compressPdf: vi.fn<
       (id: number, options: PdfOptions, onProgress?: (progress: Progress) => void) => Promise<PdfReport>
@@ -38,6 +41,9 @@ export function createApiMock() {
     compressImage: vi.fn<
       (id: number, options: RasterOptions, onProgress?: (progress: Progress) => void) => Promise<RasterReport>
     >(async (id) => imageReport(id)),
+    convertImage: vi.fn<(id: number, options: ConversionOptions, onProgress?: (progress: Progress) => void) => Promise<ConversionReport>>(async (_id, options) => ({
+      format: options.format, width: 600, height: 400, originalSize: 1000000, outputSize: 2000000, flattened: false,
+    })),
     backgroundPreview: vi.fn(async (_id: number) => "data:image/png;base64,AA=="),
     backgroundModelStatus: vi.fn<() => Promise<ModelStatus>>(async () => ({ installed: true, downloadBytes: 82537778 })),
     downloadBackgroundModel: vi.fn<(callback: (progress: DownloadProgress) => void) => Promise<ModelStatus>>(async () => ({ installed: true, downloadBytes: 82537778 })),

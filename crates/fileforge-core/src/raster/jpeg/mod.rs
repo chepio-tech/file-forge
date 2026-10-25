@@ -24,6 +24,18 @@ use segments::{APP0, APP1, APP2, APP11, APP14, APP15, COM, DHT, DRI, Frame, Item
 /// A lossy re-encode replaces the best lossless result only if at least 2% smaller (as for PDF images, ADR-0015).
 const MIN_LOSSY_GAIN: f64 = 0.98;
 
+pub(super) fn validate_conversion(input: &[u8]) -> Result<(), RasterError> {
+    let structure = segments::parse(input)?;
+    if !structure.trailing.is_empty()
+        || structure.segments().any(|(marker, payload)| {
+            is_content_credentials(marker, payload) || (marker == APP2 && payload.starts_with(b"MPF\0"))
+        })
+    {
+        return Err(RasterError::Unsupported("signed JPEG or extra images".into()));
+    }
+    Ok(())
+}
+
 pub(super) fn compress(
     input: &[u8],
     options: &RasterOptions,

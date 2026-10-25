@@ -30,10 +30,12 @@ interface JobStatusProps<Report> {
   describe: (job: DoneJob<Report>) => JobOutcome;
   onSave: (id: FileId) => void;
   onReveal: (id: FileId) => void;
+  showReduction?: boolean;
+  workingLabel?: string;
 }
 
 /** The per-file cells of a compression list: stage progress, result size and ratio, save actions. */
-function JobStatus<Report>({ id, job, busy, saving, describe, onSave, onReveal }: JobStatusProps<Report>) {
+function JobStatus<Report>({ id, job, busy, saving, describe, onSave, onReveal, showReduction = true, workingLabel }: JobStatusProps<Report>) {
   if (!job) return null;
   const text = messages.compression;
   switch (job.status) {
@@ -44,7 +46,7 @@ function JobStatus<Report>({ id, job, busy, saving, describe, onSave, onReveal }
       return (
         <span className="job-status job-status--muted">
           <Spinner />
-          {progress ? text.stageProgress(text.stages[progress.stage], progress.done, progress.total) : text.working}
+          {progress ? text.stageProgress(text.stages[progress.stage], progress.done, progress.total) : workingLabel ?? text.working}
         </span>
       );
     }
@@ -70,9 +72,9 @@ function JobStatus<Report>({ id, job, busy, saving, describe, onSave, onReveal }
           <span className="job-status__result" title={outcome.details}>
             → {formatBytes(outcome.outputSize)}
           </span>
-          <span className="job-status__reduction">
+          {showReduction ? <span className="job-status__reduction">
             {text.reduction(formatReduction(outcome.originalSize, outcome.outputSize))}
-          </span>
+          </span> : null}
           {job.savedName ? (
             <button
               type="button"
