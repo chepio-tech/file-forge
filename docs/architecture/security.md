@@ -68,8 +68,11 @@ lets a panic unwind into C, and documents each `unsafe` block (`clippy::undocume
 Its tests round-trip pixels at edge sizes and cross-check libwebp's decoder against `image-webp`.
 
 ## Temp results
-Stored in the app cache directory (`…/tech.chepio.fileforge/results`), deleted when a file is removed, on exit and at
-the next start. Staging files are created exclusively, flushed and closed before publication, and removed on failure.
+Stored in an exclusively owned session directory under the app cache (ADR-0024). Exit removes only that session;
+startup can reclaim abandoned sessions after checking OS leases. Live, linked, inaccessible and unrecognized
+entries are preserved. A separate namespace protects new sessions from older releases' cleanup; the legacy cache
+is left untouched. The protocol assumes a local cache controlled by the current OS user, not an adversarial
+same-user process. Staging files are created exclusively, flushed and closed before publication, and removed on failure.
 Individual saves use an atomic rename after checking the destination. Batch saves publish with a hard link to
 the complete staging file, retrying numbered names on collisions; this never overwrites a concurrent output.
 

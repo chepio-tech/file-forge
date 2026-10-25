@@ -131,6 +131,23 @@ mod tests {
     }
 
     #[test]
+    fn updater_exit_cleans_only_its_session_and_keeps_other_unsaved_results() {
+        let dir = tempfile::tempdir().expect("cache");
+        let root = dir.path().join("sessions");
+        let updating = ResultStore::open(root.clone()).expect("updating instance");
+        let other = ResultStore::open(root).expect("other instance");
+        updating.put(1, b"discard approved", "pdf").expect("updating result");
+        other.put(1, b"keep unsaved", "pdf").expect("other result");
+        let _install_slot = claim(&updating, true).expect("discard approved for this session");
+        updating.clear();
+        assert_eq!(other.unsaved_count(), 1);
+        assert!(matches!(claim(&other, false), Err(AppError::UnsavedResults)));
+        let kept = other.get(1).expect("other result retained");
+        assert_eq!(std::fs::read(kept.temp_path).expect("read retained"), b"keep unsaved");
+        other.put(2, b"still usable", "pdf").expect("other instance can continue");
+    }
+
+    #[test]
     fn status_serializes_in_camel_case() {
         let status = UpdateStatus { current_version: "0.1.0".into(), available_version: Some("0.2.0".into()) };
         let json = serde_json::to_value(status).ok();

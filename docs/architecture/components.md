@@ -25,6 +25,9 @@ Inside the shell, module dependencies flow from `error` (types) ← `file_regist
 `background` wires core/segment to the model manager and content-keyed single-entry embedding cache.
 `models` handles explicit, bounded HTTPS downloads and pinned verification.
 `file_registry` uses `folder_scan` (bounded search of dropped folders, ADR-0017).
+`results::session` owns per-instance directories and OS leases; it uses only the standard library and can be
+tested independently on all three desktop platforms. ResultStore serializes publication with session closure
+(ADR-0024).
 
 UI structure: `components/` shared presentational pieces, plus `UpdateStatus` (sidebar app updates, with its
 `useUpdates` hook) and the compression layout every compression tool uses (`CompressionPanel`, `JobStatus`);
