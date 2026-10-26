@@ -91,6 +91,9 @@ See [RESULTS.md](RESULTS.md) for the measured gates and the integration decision
 A separate [merge experiment](mergeExperiment/README.md) measures a local patch to the decoder's slow
 filter-state merge. Its scratch workspace leaves this ordinary probe and its dependency pins unchanged.
 
+The separate [decoder-process experiment](../avif-process-probe/README.md) measures cancellation by killing and
+waiting for a supervised probe, with bounded diagnostics and atomic output publication.
+
 ## Dependency review
 
 The independent lockfile contains exactly three third-party packages, all MIT: `avif-rust` 0.1.2,
