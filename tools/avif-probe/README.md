@@ -88,6 +88,9 @@ color/alpha/edge cases and native-plane comparisons, and record libyuv/codec ver
 
 See [RESULTS.md](RESULTS.md) for the measured gates and the integration decision.
 
+A separate [merge experiment](mergeExperiment/README.md) measures a local patch to the decoder's slow
+filter-state merge. Its scratch workspace leaves this ordinary probe and its dependency pins unchanged.
+
 ## Dependency review
 
 The independent lockfile contains exactly three third-party packages, all MIT: `avif-rust` 0.1.2,

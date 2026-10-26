@@ -49,6 +49,15 @@ jobs:
           cargo clippy --manifest-path tools/avif-probe/Cargo.toml --all-targets --locked -- -D warnings
           cargo test --manifest-path tools/avif-probe/Cargo.toml --locked
           python3 -m unittest discover -s tools/avif-probe -p 'test_*.py'
+      - name: Check isolated AVIF merge experiment
+        run: |
+          python3 tools/avif-probe/mergeExperiment/prepare.py --output "$RUNNER_TEMP/avif-merge"
+          cargo test --manifest-path "$RUNNER_TEMP/avif-merge/checks/Cargo.toml" --offline
+          cargo clippy --manifest-path "$RUNNER_TEMP/avif-merge/checks/Cargo.toml" --all-targets --offline --locked -- -D warnings
+          cargo clippy --manifest-path "$RUNNER_TEMP/avif-merge/patched/Cargo.toml" -p avif-rust --lib --offline --locked -- -D warnings
+          cargo test --manifest-path "$RUNNER_TEMP/avif-merge/patched/Cargo.toml" --offline --locked
+          rustfmt --edition 2024 --config max_width=100,skip_children=true --check tools/avif-probe/mergeExperiment/indexedMerge.rs tools/avif-probe/mergeExperiment/checks.rs
+          rustfmt --edition 2024 --config max_width=100,skip_children=true --check "$RUNNER_TEMP/avif-merge/codec/src/av1/tile_decode/post_filter_state.rs" "$RUNNER_TEMP/avif-merge/codec/src/av1/tile_decode/public_api.rs"
 
   installer-dpi:
     runs-on: windows-latest
