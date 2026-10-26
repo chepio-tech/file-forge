@@ -16,6 +16,8 @@ import random
 import subprocess
 import sys
 import time
+# Domain
+from referencePlanes import compare_planes, decode_planes, oracle_versions
 
 MAX_MEAN_RGB_ERROR = 1.0
 MAX_RGB_ERROR = 8
@@ -124,6 +126,7 @@ def main():
     binary = args.binary.resolve(strict=True)
     if not features.check("avif"):
         parser.error("the existing Pillow installation must include AVIF support")
+    reference_versions = oracle_versions()
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
     fixture_dir = root / "fixtures"
@@ -132,6 +135,7 @@ def main():
     logs.mkdir()
     report = {"platform": platform.platform(), "python": platform.python_version(),
               "pillow": Image.__version__, "libavif": features.version("avif"),
+              "plane_oracle": reference_versions,
               "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
               "thresholds": {"rgb_mean": MAX_MEAN_RGB_ERROR, "rgb_max": MAX_RGB_ERROR,
                              "alpha_max": 0, "cancel_latency_ms": MAX_CANCEL_LATENCY_MS},
@@ -152,6 +156,23 @@ def main():
     specs += [(f"orientation-{o}", 97, 65, False, "4:4:4", "full", o) for o in range(2, 9)]
     specs += [("gray", 97, 65, False, "4:0:0", "full", 1),
               ("premultiplied-alpha", 97, 65, True, "4:4:4", "full", 1)]
+    specs += [("rgb-420-limited", 97, 65, False, "4:2:0", "limited", 1),
+              ("rgb-422-limited", 97, 65, False, "4:2:2", "limited", 1),
+              ("rgba-422", 97, 65, True, "4:2:2", "full", 1),
+              ("premultiplied-alpha-420", 97, 65, True, "4:2:0", "full", 1),
+              ("premultiplied-alpha-422", 97, 65, True, "4:2:2", "full", 1),
+              ("premultiplied-alpha-limited", 97, 65, True, "4:4:4", "limited", 1),
+              ("premultiplied-alpha-low", 97, 65, True, "4:4:4", "full", 1),
+              ("premultiplied-alpha-low-420", 97, 65, True, "4:2:0", "full", 1),
+              ("premultiplied-alpha-low-422", 97, 65, True, "4:2:2", "full", 1),
+              ("premultiplied-alpha-low-limited", 97, 65, True, "4:4:4", "limited", 1),
+              ("gray-alpha", 97, 65, True, "4:0:0", "full", 1),
+              ("premultiplied-alpha-gray", 97, 65, True, "4:0:0", "full", 1),
+              ("premultiplied-alpha-low-gray", 97, 65, True, "4:0:0", "full", 1)]
+    for width, height in [(1, 1), (1, 7), (7, 1), (2, 2), (96, 64)]:
+        for subsampling in ["4:4:4", "4:2:2", "4:2:0"]:
+            specs.append((f"edge-{width}x{height}-{subsampling.replace(':', '')}",
+                          width, height, False, subsampling, "full", 1))
     specs += [("medium", 1024, 768, False, "4:4:4", "full", 1),
               ("large", 2048, 1536, False, "4:4:4", "full", 1)]
 
@@ -167,18 +188,23 @@ def main():
     for name, width, height, alpha, subsampling, range_, orientation in specs:
         source = fixture_dir / f"{name}.avif"
         owned = pattern(width, height, alpha)
+        if name.startswith("premultiplied-alpha-low"):
+            owned.putalpha(Image.frombytes("L", (width, height),
+                                          bytes((0, 1, 2, 8, 16, 64, 128, 254, 255)[i % 9]
+                                                for i in range(width * height))))
         if name == "gray":
             owned = owned.convert("L")
         exif = Image.Exif()
         exif[274] = orientation
         owned.save(source, quality=90, speed=6, subsampling=subsampling, range=range_,
-                   codec="aom", max_threads=1, exif=exif, alpha_premultiplied=name == "premultiplied-alpha")
+                   codec="aom", max_threads=1, exif=exif, alpha_premultiplied=name.startswith("premultiplied-alpha"))
         with Image.open(source) as reference:
             oracle = ImageOps.exif_transpose(reference).convert("RGBA")
             expected = oracle.tobytes()
             expected_size = oracle.size
         output = root / f"{name}.rgba"
-        run = execute(binary, source, output, logs / name)
+        diagnostic = width * height <= 65536
+        run = execute(binary, source, output, logs / name, ("--diagnostic-planes",) if diagnostic else ())
         good = run["exit_code"] == 0 and run["original_unchanged"]
         if good:
             actual_size = (int(run["fields"]["width"]), int(run["fields"]["height"]))
@@ -191,6 +217,10 @@ def main():
                 good = (metrics["rgb_mean_error"] <= MAX_MEAN_RGB_ERROR
                         and metrics["rgb_max_error"] <= MAX_RGB_ERROR and metrics["alpha_max_error"] == 0)
         record(name, "pixels", run, good)
+        if diagnostic:
+            reference = decode_planes(source.read_bytes())
+            equal = compare_planes(run["fields"], reference)
+            record(name + "-planes", "native-planes", {"exact_match": equal, "source_sha256": run["source_sha256"]}, equal)
 
     animation = fixture_dir / "animated.avif"
     frame = pattern(32, 24)

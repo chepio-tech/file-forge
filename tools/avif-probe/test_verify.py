@@ -5,9 +5,19 @@ import unittest
 from pathlib import Path
 # Domain
 from verify import pixel_metrics, refused
+from referencePlanes import compare_planes
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_native_plane_check_requires_samples_geometry_and_every_channel(self):
+        fields = {"plane_0_width": "2", "plane_0_height": "1", "plane_0_hex": "0080"}
+        self.assertTrue(compare_planes(fields, {0: (2, 1, b"\0\x80")}))
+        self.assertFalse(compare_planes(fields, {0: (2, 1, b"\0\x81")}))
+        self.assertFalse(compare_planes(fields, {0: (1, 2, b"\0\x80")}))
+        self.assertFalse(compare_planes(fields, {0: (2, 1, b"\0\x80"), 3: (2, 1, b"\xff\xff")}))
+        for change in [{"plane_0_width": "invalid"}, {"plane_0_hex": "xyz"}, {"plane_0_hex": "0"}]:
+            self.assertFalse(compare_planes(fields | change, {0: (2, 1, b"\0\x80")}))
+
     def test_alpha_errors_are_never_hidden_by_transparent_rgb(self):
         result = pixel_metrics(bytes([200, 30, 40, 1]), bytes([0, 0, 0, 0]))
         self.assertEqual(result["alpha_max_error"], 1)

@@ -15,8 +15,10 @@ python3 -m unittest discover -s tools/avif-probe -p 'test_*.py'
 python3 tools/avif-probe/verify.py --output /tmp/fileforge-avif-evaluation
 ```
 
-The last command needs an existing Pillow installation with AVIF and the `aom` encoder. The measured environment
-used Pillow 12.3.0/libavif 1.4.2. It installs nothing. Use a **new** output directory; it creates owned synthetic
+The last command needs an existing Pillow installation with AVIF and the `aom` encoder. The plane oracle requires
+libavif 1.4.2's public functions to be exported by Pillow's native extension, as in the measured Pillow 12.3.0
+installation. It uses Python's standard-library `ctypes` with opaque handles, only on small owned fixtures;
+malformed cases and user files never enter that oracle. It installs nothing. Use a **new** output directory; it creates owned synthetic
 fixtures, decoded RGBA files, process logs and `report.json` there. No downloaded photographs or private files
 are used. CI runs the Rust and standard-library Python tests; the Pillow comparison is a separate local gate.
 
@@ -36,9 +38,20 @@ reported error/refusal, 3 is a caught decoder panic. The comparison runner also 
 own child after a 20-second deadline. It processes fixtures sequentially.
 
 The tool uses only `decode_frame_bytes_strict_with_limits`; it never falls back to an unbounded decoder.
-It checks container/frame dimensions and 8-bit output, carries the reported container premultiplication flag
-into RGBA conversion, then applies rotation/mirror properties in association order. The tested premultiplied
-fixture still fails because the container reader reports that flag as false. Mirror axes follow
+It checks container/frame dimensions and reads the primary item's `prem` reference from bounded `meta`/`iref`
+boxes. The target must be the single alpha item linked back to the primary image; duplicate, contradictory,
+truncated and excessive references are refused. This corrects the pinned decoder's missing reference projection
+without patching or replacing that dependency.
+
+The probe reconstructs 8-bit sRGB from validated native planes, including monochrome alpha. It accepts explicit
+sRGB primaries/transfer, BT.601 or BT.709 matrix coefficients, full/limited range and centered 4:2:0/4:2:2 or
+4:4:4 samples. It refuses ICC profiles, unknown color properties, conflicting container/bitstream signaling,
+other transfer functions/matrices, higher precision and untested explicit chroma siting.
+Centered interpolation, horizontal endpoint extension and fixed-point RGB quantization follow the libyuv policy
+used by the measured Pillow/libavif reference. Premultiplication is undone after RGB byte quantization, which
+matters at very low alpha. This is an explicit comparison policy, not proof of a unique AVIF rendering.
+
+Rotation/mirror properties are then applied in association order. Mirror axes follow
 ISO/IEC 23008-12:2022: 0 exchanges top/bottom, 1 left/right. Clean aperture cropping
 is explicitly refused. The native API returns untransformed pixels for ordinary still images, so the adapter
 must apply these properties. This does not implement File Forge's complete provenance/HDR/metadata policy.
@@ -50,7 +63,9 @@ must apply these properties. This does not implement File Forge's complete prove
 - Native API: bounded item/property counts, metadata, ICC, derivation depth and one frame; configurable
   allocation accounting capped at 512 MiB. This is **not** a total process-memory limit.
 - The decoder documents incomplete accounting for deep tile/entropy, reference-frame and filter scratch.
-  RGBA conversion and the probe's transform buffer are outside its native allocation ledger.
+  RGBA conversion and the probe's transform buffer are outside its native allocation ledger. The new RGBA
+  allocation independently checks geometry/byte count against the CLI ceiling and uses fallible reservation;
+  this does not bound combined live memory.
 - Cancellation: a timer sets a flag, checked before/after decode and color conversion. The codec exposes no
   cancellation callback in this API. Discarding a late result does not interrupt the decoding work.
 - On macOS/Linux, `wait4` records each child's peak RSS, including its runtime baseline. It does not measure
@@ -62,6 +77,12 @@ different reconstruction filters, so a mismatch is an integration-quality findin
 AV1 source planes are decoded incorrectly. The exploratory cancellation target is 250 ms after the request;
 it is not an established desktop-app SLO. Synthetic cases and 24 seeded mutations are not a conformance corpus
 or a security proof. High-bit-depth/HDR, arbitrary ICC profiles and full grid support remain outside this probe.
+
+`--diagnostic-planes` adds native plane dimensions and hexadecimal samples to stdout for images of at most
+65,536 pixels. The comparison runner uses this only for small generated fixtures and requires exact geometry,
+plane set and byte equality with libavif before drawing conclusions about color reconstruction. Diagnostic
+logs contain pixels; use this option only for non-private fixtures. Reports retain all original 56 gates, add
+color/alpha/edge cases and native-plane comparisons, and record libyuv/codec versions as well as input/binary hashes.
 
 ## Results
 

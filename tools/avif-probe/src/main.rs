@@ -8,8 +8,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 // Domain
+use color::rgba;
+use premultiplication::premultiplied;
 use transforms::orient;
 
+mod color;
+mod premultiplication;
 mod transforms;
 
 const MAX_INPUT: u64 = 256 * 1024 * 1024;
@@ -23,6 +27,7 @@ struct Options {
     max_pixels: usize,
     allocation_budget: usize,
     cancel_after: Option<Duration>,
+    diagnostic_planes: bool,
 }
 
 fn positive(value: Option<String>, flag: &str) -> Result<usize, String> {
@@ -34,17 +39,18 @@ fn positive(value: Option<String>, flag: &str) -> Result<usize, String> {
 
 fn options(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
     let mut args = args.into_iter();
-    let usage =
-        "usage: fileforge-avif-probe INPUT OUTPUT.rgba [--max-pixels N] [--allocation-budget N] [--cancel-after-ms N]";
+    let usage = "usage: fileforge-avif-probe INPUT OUTPUT.rgba [--max-pixels N] [--allocation-budget N] [--cancel-after-ms N] [--diagnostic-planes]";
     let mut result = Options {
         input: args.next().ok_or(usage)?.into(),
         output: args.next().ok_or(usage)?.into(),
         max_pixels: MAX_PIXELS,
         allocation_budget: MAX_ALLOCATION,
         cancel_after: None,
+        diagnostic_planes: false,
     };
     while let Some(flag) = args.next() {
         match flag.as_str() {
+            "--diagnostic-planes" => result.diagnostic_planes = true,
             "--max-pixels" => result.max_pixels = positive(args.next(), &flag)?.min(MAX_PIXELS),
             "--allocation-budget" => {
                 result.allocation_budget = positive(args.next(), &flag)?.min(MAX_ALLOCATION);
@@ -106,7 +112,7 @@ fn decode(opts: &Options, cancelled: &AtomicBool) -> Result<(), String> {
     let native = decode_frame_bytes_strict_with_limits(&bytes, &limits(opts)?).map_err(|error| error.to_string())?;
     println!("decode_ms={:.3}", start.elapsed().as_secs_f64() * 1000.0);
     checkpoint(cancelled)?;
-    let (mut frame, information) = native.into_parts();
+    let (frame, information) = native.into_parts();
     let info = information.info();
     if info.width.map(|w| w as usize) != Some(frame.width) || info.height.map(|h| h as usize) != Some(frame.height) {
         return Err("container dimensions differ from decoded frame".into());
@@ -123,9 +129,34 @@ fn decode(opts: &Options, cancelled: &AtomicBool) -> Result<(), String> {
         return Err("prototype refuses precision reduction of non-8-bit input".into());
     }
     let color_start = Instant::now();
-    // Carry the reported flag; 0.1.2 still misses the prem reference emitted by the reference encoder.
-    frame.alpha_premultiplied = info.alpha_premultiplied;
-    let image = frame.to_rgba8().map_err(|error| error.to_string())?;
+    if info.alpha_grid.is_some() || info.alpha_auxiliary_items.len() > 1 {
+        return Err("prototype requires at most one ordinary alpha item".into());
+    }
+    let alpha = info.alpha_auxiliary_items.first().map(|item| item.item_id);
+    if alpha.is_some() != frame.buffers.planes.iter().any(|plane| plane.layout.plane == 3) {
+        return Err("container alpha item and decoded planes disagree".into());
+    }
+    let prem = premultiplied(&bytes, info.primary_item_id.ok_or("missing primary item")?, alpha)?;
+    if info.alpha_premultiplied && !prem {
+        return Err("premultiplication property has no matching item reference".into());
+    }
+    println!("reference_premultiplied={prem}");
+    let image = rgba(&frame, information.color_information(), prem, opts.max_pixels, opts.allocation_budget)?;
+    if opts.diagnostic_planes {
+        if frame.width.checked_mul(frame.height).is_none_or(|pixels| pixels > 65_536) {
+            return Err("plane diagnostics are limited to 65536 pixels".into());
+        }
+        for plane in &frame.buffers.planes {
+            let index = plane.layout.plane;
+            println!("plane_{index}_width={}", plane.layout.width);
+            println!("plane_{index}_height={}", plane.layout.height);
+            print!("plane_{index}_hex=");
+            for value in &plane.samples {
+                print!("{value:02x}");
+            }
+            println!();
+        }
+    }
     let image = orient(image, information.ordered_primary_properties())?;
     println!("color_ms={:.3}", color_start.elapsed().as_secs_f64() * 1000.0);
     checkpoint(cancelled)?;

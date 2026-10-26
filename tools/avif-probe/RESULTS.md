@@ -1,106 +1,121 @@
 # AVIF evaluation results — 2026-10-25
 
-**Decision: keep avif-rust 0.1.2 outside the application.** The isolated prototype is reproducible, but the
-candidate passes only **50 of 56 acceptance checks**. Color, premultiplied alpha, decoding time and cancellation
-need further work. A complete memory bound is also unproven. HEIC remains deferred for separate licensing review.
+**Decision: keep avif-rust 0.1.2 outside the application.** The color/alpha follow-up passes **125 of 127**
+acceptance checks. All completed pixel comparisons pass; large-image time and cancellation still fail, and a
+complete live-memory bound remains unproven. Application behavior and the three pinned MIT dependencies are
+unchanged. HEIC remains deferred for separate licensing review.
 
-## Method
+## Scope and method
 
-Run the commands in [README.md](README.md). The measured environment was macOS 26.6.2 on ARM64, Rust 1.99.0,
-Python 3.14.6 and Pillow 12.3.0/libavif 1.4.2. The independent AOM encoder used one thread, quality 90 and speed 6.
-Fixtures are generated from owned deterministic gradients, edges and alpha values; they are not downloaded data.
+Reproduce with [README.md](README.md). Measurements used macOS 26.6.2 ARM64, Rust 1.99.0, Python 3.14.6,
+Pillow 12.3.0/libavif 1.4.2, libyuv 1924, dav1d 1.5.3 and AOM 3.14.1. Owned deterministic gradients, sharp
+edges and transparency are encoded with AOM, quality 90, speed 6 and one thread. No private or downloaded
+fixtures are used. The raw-plane oracle calls the installed libavif's public opaque-handle APIs only for small
+valid generated images; malformed cases run only through the safe Rust probe.
 
-The final run used release binary SHA-256
-`d50639dc33f920d26d639749778f789a912aa89d02fbe22aaa144a234fbff3dc`.
-Every generated report records its own binary/input hashes, library versions, errors, timings and peak RSS.
-Timings below are individual observations, not statistical benchmarks. The runner exits 1 for this result;
-the thresholds were not relaxed to turn decoder failures into passes.
+Release probe SHA-256: `1d242219f44e1ffcee1f55d83a23b291b3c212fb187ca850e3ef61563edeb183`.
+Each report retains input hashes, native logs, pixel errors, reference versions and peak RSS. Timing values are
+individual observations, not benchmarks or evidence of a performance change. Small-image diagnostics include
+stdout plane serialization; the medium/large timing cases do not. The runner exits **1** because integration
+criteria still fail. No threshold was relaxed.
 
-## Pixel quality
+All original 56 gate names remain: **54/56 now pass**, compared with **50/56 initially**. Still-image and malformed
+fixture hashes match the initial run. The regenerated two-frame animation has different encoded bytes but is
+again verified as two frames and refused. There are 28 additional pixel cases and 43 exact native-plane checks.
 
-The gate requires identical dimensions and alpha, mean visible RGB channel error at most 1 and maximum error
-at most 8 on a 0–255 scale, compared with Pillow/libavif decoding of the same AVIF. Fully transparent RGB is
-excluded. Small fixtures are 97 × 65 pixels to exercise odd dimensions.
+## Color and transparency
+
+The gate requires identical geometry and alpha, mean visible RGB error at most 1 and maximum at most 8 on a
+0–255 scale. Fully transparent RGB is excluded; alpha is always checked. **All 44 completed pixel comparisons
+pass**, with a maximum observed RGB error of **1** and exact alpha. The 45th pixel case exceeds its deadline.
 
 | Fixture | Mean RGB error | Maximum RGB error | Result |
 | --- | ---: | ---: | --- |
-| RGB 4:4:4, full range | 0.196 | 1 | Pass |
-| RGB 4:4:4, limited range | 0.236 | 2 | Pass |
-| Straight alpha, 4:4:4 | 0.199 | 1 | Pass |
-| Monochrome | 0 | 0 | Pass |
-| Seven rotations/reflections | 0.196 each | 1 | Pass |
-| RGB 4:2:0 | 5.543 | 82 | Fail |
-| RGB 4:2:2 | 3.693 | 56 | Fail |
-| Straight alpha, 4:2:0 | 5.399 | 82 | Fail |
-| Premultiplied alpha, 4:4:4 | 52.707 | 192 | Fail |
-| RGB 4:4:4, 1024 × 768 | 0.195 | 1 | Pass |
-| RGB 4:4:4, 2048 × 1536 | Not measured | Not measured | 20-second deadline exceeded |
+| RGB 4:2:0 | 0.000 | 0 | Pass |
+| RGB 4:2:2 | 0.000 | 0 | Pass |
+| Straight alpha 4:2:0 | 0.000 | 0 | Pass |
+| Premultiplied alpha 4:4:4 | 0.310 | 1 | Pass |
+| Low alpha 4:4:4 | 0.124 | 1 | Pass |
+| Low alpha 4:2:0 | 0.094 | 1 | Pass |
+| Low alpha 4:2:2 | 0.115 | 1 | Pass |
+| Low alpha, limited range | 0.122 | 1 | Pass |
+| Monochrome with alpha | 0.000 | 0 | Pass |
 
-Alpha samples matched exactly for every completed pixel comparison. Subsampled RGB differences may come from
-different chroma reconstruction filters: source inspection shows simple nearest/averaged reconstruction in
-this candidate. This is an inference, not evidence that the underlying AV1 planes are necessarily wrong.
-A deliberate color reconstruction policy and native-plane comparison are needed before accepting these files.
+Additional passing cases cover full/limited range, seven rotations/reflections, monochrome, premultiplied
+4:2:0/4:2:2, near-zero alpha, and 1×1, 1×7, 7×1, 2×2 and 96×64 edges in 4:4:4/4:2:2/4:2:0.
+The original 97×65 fixtures retain odd-width/height coverage. Low-alpha inputs include 0, 1, 2, 8, 16, 64,
+128, 254 and 255; the lossy alpha encoder can introduce additional decoded values, which are also compared.
 
-The bounded decoder returns ordinary still-image pixels without applying their transforms. The probe applies
-rotation and reflection in property-association order, using the current mirror-axis definitions; all seven
-orientation fixtures then match. It also rejects a container/frame dimension disagreement that the native call
-otherwise accepts.
+**All 43 small-fixture native-plane comparisons are byte-exact**, including geometry, channel set and every
+Y/U/V/alpha sample. This localizes the observed discrepancies to container interpretation and RGB reconstruction
+for this corpus; it does not establish general AV1 conformance.
 
-For premultiplied alpha, both the returned frame and container projection incorrectly report `false` for the
-generated fixture. Inspection found its `prem` reference inside `iref`, while the candidate derives the flag
-from an item property. Copying the reported flag into the frame cannot recover this missing information.
-The resulting semi-transparent colors are too dark; this remains a failing gate.
+The probe now:
+
+- Reads `prem` from the primary image's item references, validates its target against the single alpha item and
+  its `auxl` relationship, and rejects malformed/duplicate/contradictory references. The pinned decoder's
+  property-based premultiplication flag remains false on these fixtures; the dependency was not patched.
+- Reconstructs centered chroma with bilinear interpolation and the reference's horizontal endpoint extension,
+  including the last column of odd-width images. The original candidate used nearest/vertical-only filtering.
+- Uses the reference libyuv fixed-point RGB quantization before undoing premultiplication. Tests with near-zero
+  alpha exposed why a fractional RGB implementation or different rounding could differ by over 100 levels.
+- Handles appended monochrome alpha by its channel id rather than assuming the fourth vector entry exists.
+- Checks plane layouts/sample ranges and uses checked byte counts and fallible RGBA allocation. Unsupported
+  color descriptions are refused explicitly; the accepted subset is documented in README.md.
+
+This rendering policy matches the measured reference; it is not a claim that AVIF mandates one unique chroma
+filter or integer matrix. BT.709 matrix behavior has deterministic unit coverage; the generated end-to-end corpus
+uses the reference encoder's BT.601 matrix. Wider color management and other chroma locations remain unvalidated.
 
 ## Time, cancellation and memory
 
-| Case | Observation | Result |
+| Case | Current observation | Result |
 | --- | --- | --- |
-| 1024 × 768 still | Decode 1,013.823 ms; peak RSS 28,868,608 bytes | Completes; approximately one second for 0.79 MP |
-| 2048 × 1536 still | Killed at 20 seconds during decode; peak RSS 66,502,656 bytes | Fails the probe deadline |
-| Cancel requested after 5 ms on 1024 × 768 | Returned at 1,015.924 ms; estimated delay 1,010.924 ms | Fails the exploratory 250 ms target |
-| Native allocation budget of one byte | Refused before decode output | Pass for this allocation path |
-| Input over 256 MiB / pixel cap of 100 | Refused, no output | Pass |
+| 1024×768 still | Decode 1368.769 ms; peak RSS 28,196,864 bytes | Pass |
+| 2048×1536 still | Killed at 20 seconds; peak RSS 61,112,320 bytes | Fail |
+| Cancel after 5 ms on 1024×768 | Estimated response delay 2,056.300 ms | Fail against 250 ms target |
+| Native allocation budget of one byte | Refused with no output | Pass for this path |
+| Input over 256 MiB / pixel cap of 100 | Refused with no output | Pass |
 
-A separate diagnostic run allowed 60 seconds for the same large fixture and completed decoding in 19,378.545 ms
-with peak RSS 70,139,904 bytes. It does not replace the failed 20-second gate or establish an infinite loop.
-Its input SHA-256 was `6321df48ada66441b0b4fe5d394985ed38bc97db27ed05b1b6937a92e01b88d6`, identical to the
-final run's large fixture.
+The codec still has no cancellation callback. Before/after checkpoints discard a late result but do not interrupt
+AV1 decoding. The 250 ms criterion remains exploratory, not an established application SLO.
 
-The API has no cancellation callback. The probe can observe cancellation before/after decoding, but cannot
-interrupt the codec itself. The 250 ms target is a feasibility criterion, not an established application SLO.
+The native ledger excludes deep tile/entropy, reference-frame and filter scratch allocations. Probe RGBA and
+transform buffers are also outside it. The new RGBA byte cap does not account for combined live buffers.
+Peak RSS includes process baseline and cannot prove the configured 512 MiB limit. No host-exhaustion experiment
+or allocation-failure injection was performed.
 
-The native allocation ledger explicitly excludes some deep tile/entropy, reference-frame and filter scratch
-allocations. RGBA conversion and the transform buffer also sit outside that ledger. Peak RSS includes process
-baseline and measures only the sampled files; it does not prove the configured 512 MiB bound. No host-exhausting
-test or allocation-failure injection was performed. A production integration needs a complete accounting
-strategy or a separately approved isolation design.
+## Refusal, safety and validation
 
-## Refusal and original protection
+All seven original malformed cases, four limit/pre-cancel cases, animation refusal and two output-protection
+checks still pass. All 24 seeded mutations complete without a panic/crash/timeout; this is smoke coverage,
+not fuzzing or a security proof. Every input retains its hash. High precision, HDR, ICC color management,
+clean aperture and full grids are not validated as supported output paths.
 
-- All seven malformed cases were refused: empty/non-AVIF input, truncated header/payload, oversized box length,
-  huge container geometry and container/frame dimension mismatch.
-- All four limit/pre-cancel cases passed. Animated AVIF with two frames was also refused.
-- All 24 seeded bit mutations completed without a panic, crash or timeout. These smoke checks are not fuzzing
-  coverage or an AV1 conformance/security proof.
-- Existing destinations and the input itself were not overwritten. Every input retained its SHA-256.
+The harness passes 17 Rust and 5 Python unit tests, formatting, warning-free Clippy and the release build.
+Workflow checks pass. New tests cover malformed/duplicate references, both item-id widths, extended box sizes,
+truncation, reference/box count bounds, chroma edges, alpha quantization, monochrome alpha, color-signaling
+refusals, malformed plane storage and allocation limits. No application dependencies, IPC, UI or release version
+were changed; the application test suites were not rerun for these isolated-tool changes.
 
-High-bit-depth/HDR, arbitrary ICC color management, clean aperture, full grids and complete application
-metadata/provenance policy were not validated. The bounded API's unsupported paths are not retried through an
-unbounded API.
+Before integration, resolve decoding/cancellation time and full allocation accounting, then broaden the corpus
+and assess the rest of the application metadata/provenance policy. Color/alpha repair alone is not approval to
+ship AVIF support.
 
-## Validation and next gate
+## Initial baseline
 
-The harness passed 7 Rust unit tests, 4 Python unit tests, formatting, Clippy with warnings denied and the
-release build. The production avif-rust library separately compiled with `--forbid unsafe_code`. The independent
-dependency graph contains the three approved MIT packages; the application's dependency graph is unchanged.
-CI checks the harness, while the local Pillow comparison records candidate acceptance failures explicitly.
+The initial probe passed 50/56 checks. RGB 4:2:0 had mean/max errors 5.543/82, RGB 4:2:2 3.693/56,
+straight alpha 4:2:0 5.399/82, and premultiplied alpha 4:4:4 52.707/192. The 20-second large-image gate and
+250 ms cancellation gate failed. A separate initial 60-second diagnostic completed the large decode in
+19,378.545 ms; it did not replace the failed gate. That historical result and current timings do not show
+that decoder performance has been fixed.
 
-Before integration, resolve the premultiplication reference, establish acceptable subsampled-color behavior,
-improve or bound decoding/cancellation time, and account for all allocations. Repeat the same gates and broaden
-the corpus before introducing the application IPC/UI changes.
+## Sources
 
-Source references: [native limits](https://docs.rs/crate/avif-rust/0.1.2/source/src/limits.rs),
-[bounded frame decoding](https://docs.rs/crate/avif-rust/0.1.2/source/src/decoder/frame.rs),
-[container metadata](https://docs.rs/crate/avif-rust/0.1.2/source/src/container.rs),
-[AV1 reconstruction](https://docs.rs/crate/avif-rust/0.1.2/source/src/av1/reconstruct.rs),
-[libavif transform definitions](https://github.com/AOMediaCodec/libavif/blob/v1.4.2/include/avif/avif.h).
+- [AVIF item reference requirements, including prem](https://aomediacodec.github.io/av1-avif/v1.2.0.html)
+- [Pinned decoder frame API](https://docs.rs/crate/avif-rust/0.1.2/source/src/decoder/frame.rs)
+- [Pinned decoder allocation limits](https://docs.rs/crate/avif-rust/0.1.2/source/src/limits.rs)
+- [libavif 1.4.2 public plane APIs](https://github.com/AOMediaCodec/libavif/blob/v1.4.2/include/avif/avif.h)
+- [libavif 1.4.2 RGB reconstruction](https://github.com/AOMediaCodec/libavif/blob/v1.4.2/src/reformat.c)
+- [libyuv matrix quantization](https://chromium.googlesource.com/libyuv/libyuv/+/refs/heads/main/source/row_common.cc)
+- [libyuv interpolation endpoints](https://chromium.googlesource.com/libyuv/libyuv/+/refs/heads/main/source/scale_any.cc)
