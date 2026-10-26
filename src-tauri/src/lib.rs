@@ -18,7 +18,7 @@ use tauri::{Manager, RunEvent};
 use crate::drag_drop::DropKinds;
 use crate::file_registry::FileRegistry;
 use crate::job_control::Cancellation;
-use crate::results::ResultStore;
+use crate::results::{CACHE_DIRECTORY, ResultStore};
 use crate::updates::PendingUpdate;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,8 +32,10 @@ pub fn run() {
         .manage(Cancellation::default())
         .manage(PendingUpdate::default())
         .setup(|app| {
-            let dir = app.path().app_cache_dir()?.join("results");
-            app.manage(ResultStore::open(dir)?);
+            let dir = app.path().app_cache_dir()?.join(CACHE_DIRECTORY);
+            let results =
+                tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || ResultStore::open(dir)))??;
+            app.manage(results);
             app.manage(models::Models::new(app.path().app_local_data_dir()?.join("models").join(models::MODEL_TAG)));
             Ok(())
         })
@@ -62,10 +64,14 @@ pub fn run() {
         .expect("Tauri must start: the bundled config and capabilities are validated at build time");
 
     app.run(|handle, event| {
-        if let RunEvent::Exit = event
-            && let Some(results) = handle.try_state::<ResultStore>()
-        {
-            results.clear();
+        if let RunEvent::Exit = event {
+            let handle = handle.clone();
+            // Finish cleanup before shutdown, with filesystem work on a blocking worker.
+            let _ = tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || {
+                if let Some(results) = handle.try_state::<ResultStore>() {
+                    results.clear();
+                }
+            }));
         }
     });
 }

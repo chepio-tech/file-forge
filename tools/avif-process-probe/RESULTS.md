@@ -54,7 +54,8 @@ was not measured by this experiment, and no total-memory guarantee is inferred f
   One ignored entry point is explicitly spawned as the worker fixture by those tests.
 - Four Python tests verify evidence acceptance, including missing/non-finite/slow latency and false reaping or
   cleanup success. Formatting, strict Clippy and release build pass. Windows cross-target Clippy is checked;
-  native Linux/Windows lifecycle runs remain pending the configured CI matrix.
+  native Linux/macOS lifecycle CI passed 17 Rust tests each and Windows passed 15 (two are Unix-only), with
+  four Python tests per OS in [run 40303593339](https://github.com/chepio-tech/file-forge/actions/runs/40303593339).
 - Workflow security checks pass. The application, ordinary probe, merge patch and their dependency pins are
   unchanged; the supervisor adds no third-party package.
 

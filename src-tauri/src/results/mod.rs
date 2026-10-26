@@ -1,5 +1,4 @@
-//! Compressed results waiting to be saved. They live in a per-app temp directory until the user saves them, so the
-//! original files are never written to (ADR-0003). The directory is emptied at startup and on exit.
+//! Results waiting to be saved. Each app instance owns its own temporary session (ADR-0024).
 
 // Core
 use std::collections::HashMap;
@@ -8,9 +7,15 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError, TryLockError};
-
+// Services
+use session::ResultSession;
 // Types
 use crate::file_registry::FileId;
+
+mod session;
+
+/// Older releases recursively delete `results`; their cleanup must not reach this namespace.
+pub const CACHE_DIRECTORY: &str = "result-sessions-v1";
 
 #[derive(Debug, Clone)]
 pub struct StoredResult {
@@ -22,21 +27,17 @@ pub struct StoredResult {
 }
 
 pub struct ResultStore {
-    dir: PathBuf,
+    session: Mutex<ResultSession>,
     results: Mutex<HashMap<FileId, StoredResult>>,
     /// Held for the whole of one compression: at most one document is in memory at a time.
     work: Mutex<()>,
 }
 
 impl ResultStore {
-    /// Starts from an empty directory, discarding results left by a previous session.
-    pub fn open(dir: PathBuf) -> io::Result<Self> {
-        match fs::remove_dir_all(&dir) {
-            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
-            _ => {}
-        }
-        fs::create_dir_all(&dir)?;
-        Ok(Self { dir, results: Mutex::default(), work: Mutex::default() })
+    /// Allocates a private session inside the shared cache root.
+    pub fn open(root: PathBuf) -> io::Result<Self> {
+        let session = Mutex::new(ResultSession::open(root)?);
+        Ok(Self { session, results: Mutex::default(), work: Mutex::default() })
     }
 
     pub fn put(&self, id: FileId, bytes: &[u8], extension: &'static str) -> io::Result<()> {
@@ -44,7 +45,9 @@ impl ResultStore {
     }
 
     pub fn put_named(&self, id: FileId, bytes: &[u8], extension: &'static str, suffix: &'static str) -> io::Result<()> {
-        let temp_path = self.dir.join(format!("{id}.{extension}"));
+        // Serialize publication with shutdown so a completed clear cannot be followed by a late result write.
+        let session = self.session.lock().unwrap_or_else(PoisonError::into_inner);
+        let temp_path = session.dir()?.join(format!("{id}.{extension}"));
         write_atomically(&temp_path, |file| file.write_all(bytes), |tmp| fs::rename(tmp, &temp_path))?;
         // A new result of another format replaces the old one under a different temp name.
         if let Some(previous) =
@@ -73,10 +76,11 @@ impl ResultStore {
         }
     }
 
-    /// Deletes every temp result; called on exit.
+    /// Closes only this session; called on exit, including the updater's direct Windows exit.
     pub fn clear(&self) {
+        let mut session = self.session.lock().unwrap_or_else(PoisonError::into_inner);
         self.lock().clear();
-        let _ = fs::remove_dir_all(&self.dir);
+        let _ = session.clear();
     }
 
     pub fn work_slot(&self) -> MutexGuard<'_, ()> {
@@ -292,16 +296,64 @@ mod tests {
     }
 
     #[test]
-    fn opening_discards_previous_session_results() {
+    fn another_instance_cannot_delete_replace_or_close_our_results() {
         let dir = tempfile::tempdir().expect("temp dir");
         let results_dir = dir.path().join("results");
-        fs::create_dir_all(&results_dir).expect("dir");
-        fs::write(results_dir.join("7.pdf"), b"old").expect("write");
+        let first = ResultStore::open(results_dir.clone()).expect("first");
+        first.put(7, b"first", "pdf").expect("write first");
+        let first_result = first.get(7).expect("first result");
+        let second = ResultStore::open(results_dir).expect("second");
+        second.put(7, b"second", "pdf").expect("write second");
+        assert_eq!(fs::read(&first_result.temp_path).expect("first intact"), b"first");
+        assert_ne!(first_result.temp_path, second.get(7).expect("second result").temp_path);
+        second.clear();
+        first.put(8, b"still running", "pdf").expect("first still writes");
+        let saved = dir.path().join("saved.pdf");
+        copy_result(&first_result, &saved).expect("first still saves");
+        first.clear();
+        first.clear();
+        assert_eq!(first.put(9, b"late result", "pdf").expect_err("closed").kind(), io::ErrorKind::NotConnected);
+        assert_eq!(fs::read(saved).expect("saved survives clear"), b"first");
+    }
 
-        let store = ResultStore::open(results_dir.clone()).expect("opens");
+    #[test]
+    fn legacy_cleanup_cannot_reach_current_results() {
+        let cache = tempfile::tempdir().expect("cache");
+        let legacy = cache.path().join("results");
+        fs::create_dir(&legacy).expect("old app");
+        fs::write(legacy.join("1.pdf"), b"legacy").expect("old result");
+        let current = ResultStore::open(cache.path().join(CACHE_DIRECTORY)).expect("new app");
+        current.put(1, b"current", "pdf").expect("new result");
+        assert_eq!(fs::read(legacy.join("1.pdf")).expect("legacy untouched"), b"legacy");
+        fs::remove_dir_all(legacy).expect("old app exits");
+        let result = current.get(1).expect("current registered");
+        assert_eq!(fs::read(result.temp_path).expect("current intact"), b"current");
+        current.put(2, b"still writable", "pdf").expect("write after legacy exit");
+    }
 
-        assert_eq!(fs::read_dir(&results_dir).expect("readable").count(), 0);
-        assert!(store.get(7).is_none());
+    #[test]
+    fn clearing_during_publication_never_reopens_the_store() {
+        let cache = tempfile::tempdir().expect("cache");
+        let store = ResultStore::open(cache.path().join(CACHE_DIRECTORY)).expect("store");
+        let ready = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            let writer = scope.spawn(|| {
+                ready.wait();
+                for id in 0..32 {
+                    if let Err(error) = store.put(id, b"result", "pdf") {
+                        assert_eq!(error.kind(), io::ErrorKind::NotConnected);
+                    }
+                }
+            });
+            ready.wait();
+            store.clear();
+            writer.join().expect("writer");
+        });
+        assert_eq!(store.unsaved_count(), 0);
+        for id in 0..32 {
+            assert!(store.get(id).is_none());
+        }
+        assert_eq!(store.put(33, b"late", "pdf").expect_err("closed").kind(), io::ErrorKind::NotConnected);
     }
 
     #[test]

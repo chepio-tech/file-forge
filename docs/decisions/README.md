@@ -25,3 +25,4 @@
 | [ADR-0021](ADR-0021-commercial-use-licenses.md) | Third-party components must allow commercial use | Accepted |
 | [ADR-0022](ADR-0022-background-removal.md) | Background removal with SAM 2.1 hiera-tiny in tract, downloaded on first use | Accepted |
 | [ADR-0023](ADR-0023-image-conversion.md) | Local JPEG, PNG and WebP conversion | Accepted |
+| [ADR-0024](ADR-0024-result-session-ownership.md) | Own temporary results per app instance | Accepted |
