@@ -1,0 +1,84 @@
+--- a/src/av1/tile_decode/post_filter_state.rs
++++ b/src/av1/tile_decode/post_filter_state.rs
+@@ -1 +1,3 @@
++pub(crate) mod indexed_merge;
++
+ use super::TileDecoder;
+@@ -1768,2 +1770,57 @@
+ impl PostFilterState {
++    pub(crate) fn merge_index_len(&self, other: &Self) -> Option<usize> {
++        [
++            (self.cdef_units.len(), other.cdef_units.len()),
++            (self.cdef_blocks.len(), other.cdef_blocks.len()),
++            (
++                self.transform_boundaries.len(),
++                other.transform_boundaries.len(),
++            ),
++            (self.restoration_units.len(), other.restoration_units.len()),
++            (
++                self.block_filter_states.len(),
++                other.block_filter_states.len(),
++            ),
++        ]
++        .into_iter()
++        .try_fold(0, |largest, (a, b)| {
++            if b == 0 {
++                Some(largest)
++            } else {
++                Some(largest.max(a.checked_add(b)?))
++            }
++        })
++    }
++
++    pub(crate) fn merge_indexed(&mut self, other: Self, scratch: &mut Vec<indexed_merge::Entry>) {
++        if self.is_empty() {
++            *self = other;
++            return;
++        }
++        indexed_merge::merge(&mut self.cdef_units, other.cdef_units, scratch, |v| {
++            (v.x, v.y)
++        });
++        indexed_merge::merge(&mut self.cdef_blocks, other.cdef_blocks, scratch, |v| {
++            (v.x, v.y)
++        });
++        indexed_merge::merge(
++            &mut self.transform_boundaries,
++            other.transform_boundaries,
++            scratch,
++            |v| (v.block.plane, v.block.x, v.block.y, v.block.tx_size as u8),
++        );
++        indexed_merge::merge(
++            &mut self.restoration_units,
++            other.restoration_units,
++            scratch,
++            |v| (v.x, v.y, v.plane),
++        );
++        indexed_merge::merge(
++            &mut self.block_filter_states,
++            other.block_filter_states,
++            scratch,
++            |v| (v.x, v.y),
++        );
++    }
++
+     pub(crate) fn merge(&mut self, other: Self) {
+--- a/src/av1/tile_decode/public_api.rs
++++ b/src/av1/tile_decode/public_api.rs
+@@ -155,6 +155,14 @@
+             reserve_destination!(block_filter_states, 4);
+-            destination
++            let count = destination
+                 .state
+-                .merge(source_state.take().expect("source state is live"));
+-            Ok(())
++                .merge_index_len(source_state.as_ref().expect("source state is live"))
++                .ok_or_else(|| {
++                    DecoderError::InvalidParam("post-filter merge index size overflows".into())
++                })?;
++            super::post_filter_state::indexed_merge::with_scratch(budget, count, |scratch| {
++                destination
++                    .state
++                    .merge_indexed(source_state.take().expect("source state is live"), scratch);
++                Ok(())
++            })
+         })();

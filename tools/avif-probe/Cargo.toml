@@ -1,0 +1,24 @@
+[package]
+name = "fileforge-avif-probe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+
+# An independent evaluation tool; none of these dependencies enter the desktop app.
+[workspace]
+
+[dependencies]
+avif-rust = { version = "=0.1.2", default-features = false }
+avif-image-buffer = "=0.1.0"
+bin-rs = { version = "=0.0.10", default-features = false, features = ["stream", "util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+
+[profile.release]
+opt-level = 3
+# Catching a dependency panic is one of the measurements; do not use panic=abort.

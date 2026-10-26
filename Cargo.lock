@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "fileforge"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "fileforge-core",
  "fileforge-segment",
@@ -1324,7 +1324,7 @@ dependencies = [
 
 [[package]]
 name = "fileforge-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "enough",
  "fileforge-webp",
@@ -1346,7 +1346,7 @@ dependencies = [
 
 [[package]]
 name = "fileforge-segment"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "fileforge-core",
  "image",
@@ -1357,7 +1357,7 @@ dependencies = [
 
 [[package]]
 name = "fileforge-webp"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "image-webp",
  "libwebp-sys",

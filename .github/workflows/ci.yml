@@ -43,6 +43,39 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: Check standalone AVIF evaluation tool
+        run: |
+          cargo fmt --manifest-path tools/avif-probe/Cargo.toml --check
+          cargo clippy --manifest-path tools/avif-probe/Cargo.toml --all-targets --locked -- -D warnings
+          cargo test --manifest-path tools/avif-probe/Cargo.toml --locked
+          python3 -m unittest discover -s tools/avif-probe -p 'test_*.py'
+      - name: Check isolated AVIF merge experiment
+        run: |
+          python3 tools/avif-probe/mergeExperiment/prepare.py --output "$RUNNER_TEMP/avif-merge"
+          cargo test --manifest-path "$RUNNER_TEMP/avif-merge/checks/Cargo.toml" --offline
+          cargo clippy --manifest-path "$RUNNER_TEMP/avif-merge/checks/Cargo.toml" --all-targets --offline --locked -- -D warnings
+          cargo clippy --manifest-path "$RUNNER_TEMP/avif-merge/patched/Cargo.toml" -p avif-rust --lib --offline --locked -- -D warnings
+          cargo test --manifest-path "$RUNNER_TEMP/avif-merge/patched/Cargo.toml" --offline --locked
+          rustfmt --edition 2024 --config max_width=100,skip_children=true --check tools/avif-probe/mergeExperiment/indexedMerge.rs tools/avif-probe/mergeExperiment/checks.rs
+          rustfmt --edition 2024 --config max_width=100,skip_children=true --check "$RUNNER_TEMP/avif-merge/codec/src/av1/tile_decode/post_filter_state.rs" "$RUNNER_TEMP/avif-merge/codec/src/av1/tile_decode/public_api.rs"
+
+  avif-process:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - run: cargo fmt --manifest-path tools/avif-process-probe/Cargo.toml --check
+      - run: cargo clippy --manifest-path tools/avif-process-probe/Cargo.toml --all-targets --offline --locked -- -D warnings
+      - run: cargo test --manifest-path tools/avif-process-probe/Cargo.toml --offline --locked
+      - run: python3 -m unittest discover -s tools/avif-process-probe -p 'test_*.py'
 
   result-sessions:
     name: result-sessions (${{ matrix.os }})

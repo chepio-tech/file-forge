@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/fileforge-core", "crates/fileforge-webp", "crates/fileforge-segment", "src-tauri"]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 rust-version = "1.92"
 authors = ["Denys Chepiha"]
