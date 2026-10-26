@@ -62,10 +62,19 @@ must apply these properties. This does not implement File Forge's complete prove
 - Geometry: at most 32 million pixels; optional CLI limits can only tighten this ceiling.
 - Native API: bounded item/property counts, metadata, ICC, derivation depth and one frame; configurable
   allocation accounting capped at 512 MiB. This is **not** a total process-memory limit.
-- The decoder documents incomplete accounting for deep tile/entropy, reference-frame and filter scratch.
-  RGBA conversion and the probe's transform buffer are outside its native allocation ledger. The new RGBA
-  allocation independently checks geometry/byte count against the CLI ceiling and uses fallible reservation;
-  this does not bound combined live memory.
+- Adapter buffers: one shared budget covers actual vector capacities of the compressed input, RGBA output and
+  rotation scratch. The same CLI option sets this separate budget, also capped at 512 MiB. Old/new buffers
+  remain charged together during a rotation or growing-input copy; mirrors allocate no new pixel buffer.
+  Requested capacity is checked before fallible allocation, then actual capacity before accepting the owner.
+  An oversized returned allocation is dropped on refusal; it may exist briefly before that check. Vector
+  storage drops before its charge, including errors/unwinding. No growable vector is exposed to callers.
+- Input storage is released after its last premultiplication-reference check, before RGBA conversion. Native
+  planes are released after conversion/optional diagnostics, before orientation. Growing reads use bounded
+  chunks and refuse over-limit input; reallocating growth charges both copies and may refuse before 256 MiB.
+- The decoder still documents incomplete accounting for deep tile/entropy, reference-frame and filter scratch.
+  Its native ledger is separate from the adapter budget: these are **not** one combined 512 MiB ceiling.
+  Allocator overhead, metadata, the fixed 8 KiB read scratch, runtime and other decoder allocations are outside
+  the adapter count. No total process-memory bound or OS memory limit is established.
 - Cancellation: a timer sets a flag, checked before/after decode and color conversion. The codec exposes no
   cancellation callback in this API. Discarding a late result does not interrupt the decoding work.
 - On macOS/Linux, `wait4` records each child's peak RSS, including its runtime baseline. It does not measure
@@ -86,7 +95,10 @@ color/alpha/edge cases and native-plane comparisons, and record libyuv/codec ver
 
 ## Results
 
-See [RESULTS.md](RESULTS.md) for the measured gates and the integration decision.
+See [RESULTS.md](RESULTS.md) for the historical color gates and integration decision, and
+[bufferResults.md](bufferResults.md) for the adapter-buffer follow-up. Successful runs report
+`adapter_peak_capacity_bytes` and `adapter_live_capacity_bytes` (zero after releasing the output). These are
+adapter vector ownership counters, distinct from peak RSS and the decoder's incomplete native ledger.
 
 A separate [merge experiment](mergeExperiment/README.md) measures a local patch to the decoder's slow
 filter-state merge. Its scratch workspace leaves this ordinary probe and its dependency pins unchanged.

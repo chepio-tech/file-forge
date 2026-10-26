@@ -1,8 +1,10 @@
 //! The bounded native API returns unrotated pixels; apply container properties in order.
 // Core
-use avif_rust::{ImageBuffer, NativePropertyRecord};
+use avif_rust::NativePropertyRecord;
+// Domain
+use crate::buffers::Image;
 
-pub fn orient(mut image: ImageBuffer, properties: &[NativePropertyRecord]) -> Result<ImageBuffer, String> {
+pub fn orient(mut image: Image, properties: &[NativePropertyRecord]) -> Result<Image, String> {
     if image.width.checked_mul(image.height).and_then(|n| n.checked_mul(4)) != Some(image.rgba.len()) {
         return Err("invalid RGBA dimensions".into());
     }
@@ -14,9 +16,7 @@ pub fn orient(mut image: ImageBuffer, properties: &[NativePropertyRecord]) -> Re
                 }
                 for _ in 0..rotation.angle {
                     let (w, h) = (image.width, image.height);
-                    let mut rotated = Vec::new();
-                    rotated.try_reserve_exact(image.rgba.len()).map_err(|error| error.to_string())?;
-                    rotated.resize(image.rgba.len(), 0);
+                    let mut rotated = image.rgba.zeroed_sibling(image.rgba.len())?;
                     for y in 0..h {
                         for x in 0..w {
                             let source = (y * w + x) * 4;
@@ -24,7 +24,7 @@ pub fn orient(mut image: ImageBuffer, properties: &[NativePropertyRecord]) -> Re
                             rotated[destination..destination + 4].copy_from_slice(&image.rgba[source..source + 4]);
                         }
                     }
-                    image = ImageBuffer { width: h, height: w, rgba: rotated };
+                    image = Image { width: h, height: w, rgba: rotated };
                 }
             }
             NativePropertyRecord::Mirror(mirror) => {
@@ -61,12 +61,21 @@ mod tests {
     use avif_rust::{ImageMirror, ImageRotation};
     // Domain
     use super::*;
+    use crate::buffers::Budget;
 
-    fn pixels() -> ImageBuffer {
-        ImageBuffer { width: 2, height: 3, rgba: (1..=6).flat_map(|n| [n, n, n, 255]).collect() }
+    fn pixels_with(budget: &Budget) -> Image {
+        let mut rgba = budget.empty(24).expect("pixels");
+        for n in 1..=6 {
+            rgba.append(&[n, n, n, 255]).expect("pixel");
+        }
+        Image { width: 2, height: 3, rgba }
     }
 
-    fn labels(image: &ImageBuffer) -> Vec<u8> {
+    fn pixels() -> Image {
+        pixels_with(&Budget::new(48))
+    }
+
+    fn labels(image: &Image) -> Vec<u8> {
         image.rgba.as_chunks::<4>().0.iter().map(|pixel| pixel[0]).collect()
     }
 
@@ -89,7 +98,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_pixel_storage_before_transforming() {
-        let image = ImageBuffer { width: 2, height: 2, rgba: vec![0; 4] };
+        let image = Image { width: 2, height: 2, rgba: Budget::new(4).zeroed(4).expect("pixels") };
         assert!(orient(image, &[]).is_err());
     }
 
@@ -97,5 +106,24 @@ mod tests {
     fn horizontal_axis_mirrors_top_and_bottom() {
         let image = orient(pixels(), &[NativePropertyRecord::Mirror(ImageMirror { axis: 0 })]).expect("mirror");
         assert_eq!(labels(&image), [5, 6, 3, 4, 1, 2]);
+    }
+
+    #[test]
+    fn rotations_share_budget_and_release_each_previous_buffer() {
+        let rotation = NativePropertyRecord::Rotation(ImageRotation { angle: 3 });
+        let budget = Budget::new(48);
+        let result = orient(pixels_with(&budget), &[rotation.clone(), rotation.clone()]).expect("rotations");
+        assert_eq!(labels(&result), [6, 5, 4, 3, 2, 1]);
+        assert_eq!(budget.peak(), 48);
+        assert_eq!(budget.live(), 24);
+        drop(result);
+        assert_eq!(budget.live(), 0);
+
+        let budget = Budget::new(47);
+        assert!(orient(pixels_with(&budget), &[rotation]).is_err());
+        assert_eq!(budget.live(), 0);
+        let image = pixels_with(&budget);
+        assert!(orient(image, &[NativePropertyRecord::Mirror(ImageMirror { axis: 0 })]).is_ok());
+        assert_eq!(budget.live(), 0);
     }
 }

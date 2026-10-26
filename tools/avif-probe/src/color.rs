@@ -1,7 +1,9 @@
 //! Explicit sRGB reconstruction for the evaluated 8-bit SDR subset.
 // Core
 use avif_rust::av1::{ChromaSamplePosition, ColorRange, PlaneBuffer};
-use avif_rust::{ColorInformationSet, DecodedFrame, ImageBuffer};
+use avif_rust::{ColorInformationSet, DecodedFrame};
+// Domain
+use crate::buffers::{Budget, Image};
 
 fn validate_plane(plane: &PlaneBuffer, index: u8, width: usize, height: usize, sx: u8, sy: u8) -> Result<(), String> {
     let layout = plane.layout;
@@ -49,8 +51,8 @@ pub fn rgba(
     metadata: &ColorInformationSet,
     premultiplied: bool,
     max_pixels: usize,
-    allocation_budget: usize,
-) -> Result<ImageBuffer, String> {
+    budget: &Budget,
+) -> Result<Image, String> {
     let config = frame.color_config;
     let description = config.color_description.ok_or("prototype requires explicit sRGB color description")?;
     if frame.bit_depth != 8
@@ -85,7 +87,7 @@ pub fn rgba(
     let (width, height) = (frame.width, frame.height);
     let pixels =
         width.checked_mul(height).filter(|n| *n > 0 && *n <= max_pixels).ok_or("output pixel limit exceeded")?;
-    let bytes = pixels.checked_mul(4).filter(|n| *n <= allocation_budget).ok_or("RGBA allocation budget exceeded")?;
+    let bytes = pixels.checked_mul(4).ok_or("RGBA byte count overflow")?;
     if (frame.buffers.width, frame.buffers.height) != (width, height) {
         return Err("frame and plane dimensions disagree".into());
     }
@@ -119,8 +121,7 @@ pub fn rgba(
         _ => return Err("unsupported color matrix".into()),
     };
     let (luma_gain, luma_bias) = if full { (16320, 32) } else { (18997, -1160) };
-    let mut result = Vec::new();
-    result.try_reserve_exact(bytes).map_err(|error| error.to_string())?;
+    let mut result = budget.zeroed(bytes)?;
     for y in 0..height {
         for x in 0..width {
             let index = y * width + x;
@@ -133,7 +134,7 @@ pub fn rgba(
                 let cr = sample(&planes[2], x, y, width).round() as i32 - 128;
                 [luma + red_v * cr, luma - green_u * cb - green_v * cr, luma + blue_u * cb]
             };
-            for channel in rgb {
+            for (channel_index, channel) in rgb.into_iter().enumerate() {
                 let quantized = (channel >> 6).clamp(0, 255) as u32;
                 // Match the reference's byte RGB -> straight-alpha order. Keeping a
                 // fractional color here produces different near-transparent samples.
@@ -144,12 +145,12 @@ pub fn rgba(
                 } else {
                     (quantized * 255 + u32::from(a) / 2) / u32::from(a)
                 };
-                result.push(straight.min(255) as u8);
+                result[index * 4 + channel_index] = straight.min(255) as u8;
             }
-            result.push(a);
+            result[index * 4 + 3] = a;
         }
     }
-    Ok(ImageBuffer { width, height, rgba: result })
+    Ok(Image { width, height, rgba: result })
 }
 
 #[cfg(test)]
@@ -205,8 +206,8 @@ mod tests {
         }
     }
 
-    fn convert(frame: &DecodedFrame, prem: bool) -> Result<ImageBuffer, String> {
-        rgba(frame, &ColorInformationSet::default(), prem, 100, 1000)
+    fn convert(frame: &DecodedFrame, prem: bool) -> Result<Image, String> {
+        rgba(frame, &ColorInformationSet::default(), prem, 100, &Budget::new(1000))
     }
 
     #[test]
@@ -293,7 +294,7 @@ mod tests {
         bad.color_config.color_description.as_mut().expect("description").transfer_characteristics = 16;
         assert!(convert(&bad, false).is_err());
         let mut metadata = ColorInformationSet { icc_profile: Some(vec![1]), ..Default::default() };
-        assert!(rgba(&base, &metadata, false, 100, 1000).is_err());
+        assert!(rgba(&base, &metadata, false, 100, &Budget::new(1000)).is_err());
         metadata.icc_profile = None;
         metadata.nclx = Some(NclxColorInformation {
             color_primaries: 1,
@@ -301,14 +302,14 @@ mod tests {
             matrix_coefficients: 6,
             full_range_flag: false,
         });
-        assert!(rgba(&base, &metadata, false, 100, 1000).is_err());
+        assert!(rgba(&base, &metadata, false, 100, &Budget::new(1000)).is_err());
     }
 
     #[test]
     fn rejects_malformed_planes_and_bounds_output_allocation() {
         let base = frame(true, true, true);
-        assert!(rgba(&base, &ColorInformationSet::default(), false, 8, 1000).is_err());
-        assert!(rgba(&base, &ColorInformationSet::default(), false, 100, 35).is_err());
+        assert!(rgba(&base, &ColorInformationSet::default(), false, 8, &Budget::new(1000)).is_err());
+        assert!(rgba(&base, &ColorInformationSet::default(), false, 100, &Budget::new(35)).is_err());
         assert!(convert(&base, true).is_err());
         for change in 0..4 {
             let mut bad = base.clone();
@@ -328,5 +329,23 @@ mod tests {
             }
             assert!(convert(&bad, false).is_err());
         }
+    }
+
+    #[test]
+    fn conversion_uses_remaining_shared_capacity_and_releases_ownership() {
+        let frame = frame(false, false, true);
+        let metadata = ColorInformationSet::default();
+        let budget = Budget::new(40);
+        let held = budget.empty(5).expect("other adapter owner");
+        assert!(rgba(&frame, &metadata, false, 100, &budget).is_err());
+        assert_eq!(budget.live(), 5);
+        drop(held);
+        let held = budget.empty(4).expect("exact remaining capacity");
+        let image = rgba(&frame, &metadata, false, 100, &budget).expect("convert");
+        assert_eq!(budget.live(), 40);
+        drop(image);
+        assert_eq!(budget.live(), 4);
+        drop(held);
+        assert_eq!(budget.live(), 0);
     }
 }
