@@ -1,18 +1,22 @@
 //! Standalone evaluation of the bounded AVIF API. This is not an application decoder.
 // Core
 use avif_rust::{NativeDecodeLimits, decode_frame_bytes_strict_with_limits};
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 // Domain
+use buffers::Budget;
 use color::rgba;
+use input::read_bounded;
 use premultiplication::premultiplied;
 use transforms::orient;
 
+mod buffers;
 mod color;
+mod input;
 mod premultiplication;
 mod transforms;
 
@@ -65,20 +69,6 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
     Ok(result)
 }
 
-fn read_bounded(path: &Path) -> Result<Vec<u8>, String> {
-    let file = File::open(path).map_err(|error| error.to_string())?;
-    let metadata = file.metadata().map_err(|error| error.to_string())?;
-    if !metadata.is_file() || metadata.len() > MAX_INPUT {
-        return Err("input must be a regular file of at most 256 MiB".into());
-    }
-    let mut bytes = Vec::new();
-    file.take(MAX_INPUT + 1).read_to_end(&mut bytes).map_err(|error| error.to_string())?;
-    if bytes.len() as u64 > MAX_INPUT {
-        return Err("input grew beyond 256 MiB".into());
-    }
-    Ok(bytes)
-}
-
 fn limits(opts: &Options) -> Result<NativeDecodeLimits, String> {
     NativeDecodeLimits::new(
         MAX_INPUT as usize,
@@ -104,7 +94,8 @@ fn checkpoint(cancelled: &AtomicBool) -> Result<(), String> {
 
 fn decode(opts: &Options, cancelled: &AtomicBool) -> Result<(), String> {
     checkpoint(cancelled)?;
-    let bytes = read_bounded(&opts.input)?;
+    let budget = Budget::new(opts.allocation_budget);
+    let bytes = read_bounded(&opts.input, MAX_INPUT as usize, &budget)?;
     checkpoint(cancelled)?;
     let start = Instant::now();
     println!("stage=decode");
@@ -141,7 +132,8 @@ fn decode(opts: &Options, cancelled: &AtomicBool) -> Result<(), String> {
         return Err("premultiplication property has no matching item reference".into());
     }
     println!("reference_premultiplied={prem}");
-    let image = rgba(&frame, information.color_information(), prem, opts.max_pixels, opts.allocation_budget)?;
+    drop(bytes);
+    let image = rgba(&frame, information.color_information(), prem, opts.max_pixels, &budget)?;
     if opts.diagnostic_planes {
         if frame.width.checked_mul(frame.height).is_none_or(|pixels| pixels > 65_536) {
             return Err("plane diagnostics are limited to 65536 pixels".into());
@@ -157,6 +149,7 @@ fn decode(opts: &Options, cancelled: &AtomicBool) -> Result<(), String> {
             println!();
         }
     }
+    drop(frame);
     let image = orient(image, information.ordered_primary_properties())?;
     println!("color_ms={:.3}", color_start.elapsed().as_secs_f64() * 1000.0);
     checkpoint(cancelled)?;
@@ -175,6 +168,9 @@ fn decode(opts: &Options, cancelled: &AtomicBool) -> Result<(), String> {
     println!("width={}", image.width);
     println!("height={}", image.height);
     println!("output_bytes={}", image.rgba.len());
+    drop(image);
+    println!("adapter_peak_capacity_bytes={}", budget.peak());
+    println!("adapter_live_capacity_bytes={}", budget.live());
     Ok(())
 }
 

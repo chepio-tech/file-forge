@@ -5,6 +5,9 @@ acceptance checks. All completed pixel comparisons pass; large-image time and ca
 complete live-memory bound remains unproven. Application behavior and the three pinned MIT dependencies are
 unchanged. HEIC remains deferred for separate licensing review.
 
+The subsequent [adapter-buffer follow-up](bufferResults.md) adds shared capacity accounting and shorter
+buffer lifetimes. The measurements below are the historical color/alpha stage.
+
 ## Scope and method
 
 Reproduce with [README.md](README.md). Measurements used macOS 26.6.2 ARM64, Rust 1.99.0, Python 3.14.6,
