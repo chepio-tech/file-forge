@@ -15,7 +15,7 @@ hayro-jpeg2000 = { version = "0.4.1", default-features = false, features = ["std
 image = { version = "0.25", default-features = false }
 jpeg-decoder = { version = "0.3", default-features = false, features = ["platform_independent"] }
 jpeg-encoder = "0.7"
-lopdf = "0.45"
+lopdf = "0.46"
 # Lossy JPEG encoder: safe Rust port of mozjpeg (trellis, progressive), fed pixels decoded by jpeg-decoder.
 mozjpeg-rs = { version = "0.9.2", default-features = false }
 # Cancellation hook of mozjpeg-rs (its `Stop` trait).
