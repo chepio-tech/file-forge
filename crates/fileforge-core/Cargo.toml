@@ -9,13 +9,13 @@ authors.workspace = true
 [dependencies]
 flate2 = "1.1"
 # At least 0.4.1: 0.4.0 blurs irreversible (9/7) images (upstream fix #1340, ADR-0015).
-hayro-jpeg2000 = { version = "0.4.1", default-features = false, features = ["std", "simd"] }
+hayro-jpeg2000 = { version = "0.5.0", default-features = false, features = ["std", "simd"] }
 # Resizing only. JPEG decoding uses jpeg-decoder: zune-jpeg 0.5.15 (image's JPEG backend) misdecodes the JPEGs
 # jpeg-encoder writes with optimized Huffman tables, which corrupted files compressed a second time (ADR-0015).
 image = { version = "0.25", default-features = false }
 jpeg-decoder = { version = "0.3", default-features = false, features = ["platform_independent"] }
 jpeg-encoder = "0.7"
-lopdf = "0.45"
+lopdf = "0.47"
 # Lossy JPEG encoder: safe Rust port of mozjpeg (trellis, progressive), fed pixels decoded by jpeg-decoder.
 mozjpeg-rs = { version = "0.9.2", default-features = false }
 # Cancellation hook of mozjpeg-rs (its `Stop` trait).
